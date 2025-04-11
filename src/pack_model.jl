@@ -4,10 +4,14 @@ using ..CellModel
 export battery_pack_ecm!
 
 function battery_pack_ecm!(du, u, p, t)
-    num_cells = p[:num_cells]
-    for i in 1:num_cells
-        cell_params = Dict(:Q => p[:Q], :R0 => p[:R0], :R1 => p[:R1], :C1 => p[:C1], :I => p[:I])
-        du[i:i+1] .= battery_cell_ecm!(du[i:i+1], u[i:i+1], cell_params, t)
+    for i in 1:p.num_cells       
+        u_per_cell = size(u,1)/p.num_cells # equations per cell
+        j = Int(u_per_cell*(i-1) + 1)
+        
+        u_cell = @view u[j:j+1]
+        du_cell = @view du[j:j+1]
+
+        battery_cell_ecm!(du_cell, u_cell, p.cell_params, t)
     end
 end
 
