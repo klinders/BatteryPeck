@@ -9,29 +9,34 @@ function constant_current(t)
     return 2.0  # Constant discharge of 2A
 end
 
-abstract type Step end
 
-struct CurrentStep <: Step
-    current::Float64
-    period::Float64
+struct Step
+    current::Function
+    period::Int
+    function Step(c::Function,p::Int)
+        new(c,p)
+    end
+    function Step(c::Number, p::Int)
+        new(x->c,p)
+    end
 end
 
-struct CrateStep <: Step
-    crate::Float64
-    period::Float64
-end
+# struct CrateStep <: Step
+#     crate::Float64
+#     period::Float64
+# end
 
-struct PowerStep <: Step
-    power::Float64
-    period::Float64
-end
+# struct PowerStep <: Step
+#     power::Float64
+#     period::Float64
+# end
 
 Base.@kwdef mutable struct Model
     objective::Function
-    submodels::Vector{Model}
     params::Parameters
-    is_valid::Bool
-    function Model(objective::Function, submodels::Vector{Model}, params::Parameters)
+    submodels::Vector{Model}=nothing
+    is_valid::Bool=false
+    function Model(objective::Function, params::Parameters, submodels::Vector{Model}=nothing)
 
         # Do some validation
         is_valid = true
@@ -44,13 +49,16 @@ Base.@kwdef mutable struct Model
         end
 
         # Set the values
-        new(objective, submodels, params, is_valid)
+        x = new(objective, params, submodels)
+        x.is_valid = is_valid
+
+        x
     end
 end
 
 Base.@kwdef mutable struct Experiment
     steps::Vector{Step}
-    is_valid::Bool
+    is_valid::Bool=false
     function Experiment(a::Vector{Step})
         # Do some validation
         is_valid = true
@@ -58,6 +66,8 @@ Base.@kwdef mutable struct Experiment
         # Set the values
         x = new(a)
         x.is_valid = is_valid
+
+        x
     end
 end
 
@@ -70,9 +80,11 @@ function solve(sim::Simulation, tspan=(0,100))
       
     f = ODEFunction(sim.model.objective)
 
-    prob = ODEProblem(f, sim.model._u0, tspan, sim.model.params)
+    sim.model.params.I = sim.experiment.steps[1].current
+
+    prob = ODEProblem(f, sim.model.params.u0, tspan, sim.model.params)
     
-    return solve(prob)
+    return DifferentialEquations.solve(prob)
 end
 
 end  # module Solvers

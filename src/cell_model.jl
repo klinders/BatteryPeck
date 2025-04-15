@@ -4,10 +4,12 @@ export battery_cell_ecm!, Parameters, CellParameters, LG50T
 abstract type Parameters end
 
 mutable struct CellParameters <: Parameters
-    Q::Float64   # 1Ah battery (3600 Coulombs)
-    R0::Float64    # Internal resistance
-    R1::Float64    # RC resistance
+    Q::Float64    # 1Ah battery (3600 Coulombs)
+    R0::Float64   # Internal resistance
+    R1::Float64   # RC resistance
     C1::Float64   # RC capacitance
+    I::Function   # Current
+    u0::Vector{Float64} # Initial conditions
 
     function CellParameters(params::Dict)
 
@@ -24,7 +26,8 @@ LG50T = Dict{String, Any}(
     "Q"=>3600,
     "R0" => 0.2,
     "R1" => 0.1,
-    "C1" => 350
+    "C1" => 350,
+    "u0" => [1.0,0.0]
 )
 
 function battery_cell_ecm!(du, u, p::CellParameters, t)
