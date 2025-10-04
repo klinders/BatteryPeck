@@ -5,7 +5,7 @@ using ModelingToolkit: t_nounits as t
 
 params = Chen2020()
 
-Ncell = 2
+Ncell = 10
 
 function PackF(;name)
     @named current = Constant(k=-5)
