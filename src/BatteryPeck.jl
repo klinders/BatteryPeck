@@ -5,9 +5,10 @@ using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
-include("SPMe/SPMe.jl")
 include("ParameterSets/Base.jl")
+include("helpers.jl")
 include("ParameterSets/Chen2020.jl")
+include("SPMe/SPMe.jl")
 #include("solvers.jl")
 
 export SPMe, Chen2020

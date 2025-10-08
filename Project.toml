@@ -9,6 +9,6 @@ ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
 
 [compat]
-DifferentialEquations = "7.16.1"
-ModelingToolkit = "9.72.0"
-ModelingToolkitStandardLibrary = "2.21.1"
+DifferentialEquations = "7"
+ModelingToolkit = "10"
+ModelingToolkitStandardLibrary = "2"

@@ -1,15 +1,6 @@
 using ModelingToolkit
-include("../ParameterSets/Base.jl")
 
-# Harmonic mean for face diffusivity
-# From:
-# http://dx.doi.org/10.1149/2.0291607jes
-function D_face(Dleft, Dright, Δxleft, Δxright)
-    # Harmonic mean of left and right diffusivities
-    return (Δxleft + Δxright)/(Δxleft/Dleft + Δxright/Dright)
-end
-
-function SolidParticle(; name, p::SolidParticleParameters, Nᵣ=10)
+function SolidParticle(; name, p::SolidParticleParameters, g)
     
     @parameters begin
         t
@@ -28,7 +19,7 @@ function SolidParticle(; name, p::SolidParticleParameters, Nᵣ=10)
     
     @variables begin
         # I am adding two ghost nodes for the boundary conditions
-        (c(t))[1:Nᵣ] = repeat([p.c₀],Nᵣ)
+        (c(t))[1:g.Nᵣ] = repeat([p.c₀],g.Nᵣ)
         c_avr(t)
         c_surf(t)
         U₀(t)
@@ -37,17 +28,13 @@ function SolidParticle(; name, p::SolidParticleParameters, Nᵣ=10)
     end
 
     # Discretized equations
-    Δr = p.Rₖ/Nᵣ
-    r = ([Δr*(i-0.5) for i in 1:Nᵣ]) # Radial positions
-    Vᵢ = 4/3*π*[(r[i] + Δr/2)^3 - (r[i] - Δr/2)^3 for i in 1:Nᵣ]
-    Aₗ = 4*π*[(r[i] - Δr/2)^2 for i in 1:Nᵣ]
-    Aᵣ = 4*π*[(r[i] + Δr/2)^2 for i in 1:Nᵣ]
-    Dₗ = [nothing, [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:Nᵣ]...] # Left diffusivities
-    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:Nᵣ-1]..., nothing] # Left diffusivities
+    Δr,r,Vᵢ,Aₗ,Aᵣ = g.Δr, g.r, g.Vᵢ, g.Aₗ, g.Aᵣ
+    Dₗ = [nothing, [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:g.Nᵣ]...] # Left diffusivities
+    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]..., nothing] # Left diffusivities
 
     eqns = [
-        c_avr ~ sum(c)/Nᵣ
-        c_surf ~ c[Nᵣ] # Surface concentration
+        c_avr ~ sum(c)/g.Nᵣ
+        c_surf ~ c[g.Nᵣ] # Surface concentration
         z ~ c_surf/p.c₊ # Stoichiometry
         U₀ ~ p.Uₖ(z) # Open-circuit potential
 
@@ -55,7 +42,7 @@ function SolidParticle(; name, p::SolidParticleParameters, Nᵣ=10)
         Dt(c[1]) ~ (Dᵣ[1]*Aᵣ[1]*(c[2] - c[1])/Δr)/Vᵢ[1]
 
         # Internal nodes
-        [Dt(c[i]) ~ (Dᵣ[i]*Aᵣ[i]*(c[i+1] - c[i])/Δr - Dₗ[i]*Aₗ[i]*(c[i] - c[i-1])/Δr)/Vᵢ[i] for i in 2:Nᵣ-1]...
+        [Dt(c[i]) ~ (Dᵣ[i]*Aᵣ[i]*(c[i+1] - c[i])/Δr - Dₗ[i]*Aₗ[i]*(c[i] - c[i-1])/Δr)/Vᵢ[i] for i in 2:g.Nᵣ-1]...
 
         # Boundary condition edge
         Dt(c[end]) ~ (-Aᵣ[end]*J.u/F/p.aₖ - Dₗ[end]*Aₗ[end]*(c[end] - c[end-1])/Δr)/Vᵢ[end]

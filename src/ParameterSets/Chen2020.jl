@@ -1,4 +1,4 @@
-include("Base.jl")
+# include("Base.jl")
 
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
