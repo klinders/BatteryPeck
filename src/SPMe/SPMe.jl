@@ -5,6 +5,9 @@ using ModelingToolkitStandardLibrary.Electrical
 
 include("SolidParticle.jl")
 include("Electrolyte.jl")
+include("Potentials.jl")
+
+@register_symbolic ϕ(params::BatteryParameters, g::NamedTuple, e::Symbolics.AbstractArray, ne, pe, i_app)::NamedTuple
 
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
     @parameters begin
@@ -25,20 +28,34 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         v(t)
         i(t)
         #Jsr(t) # Side reaction current density
+        Voc(t)
+        Vt(t)
     end
-
 
     if Q==0
         Q = params.Q₀
     end
-
-    # Potentials
-    ϕₙ_array = 
     
     # Scale the current density to the electrode area
     i_app = i/Q*params.i₀
     
+    # Porosity per region
+    ϵ = [
+        [el.ϵₙ for _ in g.el.ixₙ] 
+        [el.ϵₛ for _ in g.el.ixₛ]
+        [el.ϵₚ for _ in g.el.ixₚ] 
+    ]
+    
     eqns = [
+        # Potentials
+        U₀ ~ U₀(params, ne.c_surf, pe.c_surf),
+        ηᵣ ~ ηᵣ(params, g, el.cₑ, ne.c_surf, pe.c_surf,i_app),
+        ηₑ ~ ηₑ(params,g,el.cₑ), 
+        Δϕₑ ~ Δϕₑ(params, g, el.cₑ, ϵ, i_app),
+        Δϕₛ ~ Δϕₛ(params, g, i_app),
+        Δϕf ~ Δϕf(params, g, i_app), 
+        v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
+        
         v ~ p.v - n.v,
         0 ~ p.i + n.i,
         i ~ p.i,
@@ -53,32 +70,4 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ]
 
     return System(eqns, t; name=name,systems=[p,n, pe, ne, el])
-end
-
-
-function ϕₙ(params::BatteryParameters, g, el, ne, i_app)
-    R = 8.314 # Universal gas constant
-    F = 96485 # Faraday's constant
-    T = 298 # Temperature
-
-    Nx = g.Nx
-    ixₙ = g.ixₙ
-    Δx = g.Δx
-    Δxₗ = g.Δxₗ
-    Δxᵣ = g.Δxᵣ
-
-    # Bruggeman coefficients per region
-    b = [
-        [params.e.bₙ for _ in g.ixₙ] 
-        [params.e.bₛ for _ in g.ixₛ]
-        [params.e.bₚ for _ in g.ixₚ] 
-    ]
-
-    σ_eff = [params.n.σ_eff for _ in 1:sum(Nx)] # Effective conductivity per cell
-
-    ϕₙ_array = [
-        el.ϕₑ[i] + ne.U₀ + R*T/F*log(ne.c_surf/params.n.c₊) for i in ixₙ
-    ]
-
-    return ϕₙ_array
 end

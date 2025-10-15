@@ -45,3 +45,13 @@ function build_fvm_geometry(params::BatteryParameters, N::Dict{Symbol,Vector{Int
 
     return (ne=ne, pe=pe, el=el)
 end
+
+# Trapezoidal integral
+# FVM definition holds
+function ∫(f, x,f₀=0)
+    # @assert length(x) == length(f)
+    return sum([
+            f[1]*x[1]/2 + f₀,
+            [(f[i] + f[i-1])*(x[i] - x[i-1])/2 for i in 2:length(x)]...,
+    ])
+end

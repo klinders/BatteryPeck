@@ -30,6 +30,9 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
         # Actual concentration
         (cₑ(t))[1:g.Nₜ]
+
+        # Actual porosity
+        
     end
 
     function iₑ(x)
