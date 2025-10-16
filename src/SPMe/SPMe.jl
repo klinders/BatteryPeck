@@ -7,7 +7,12 @@ include("SolidParticle.jl")
 include("Electrolyte.jl")
 include("Potentials.jl")
 
-@register_symbolic ϕ(params::BatteryParameters, g::NamedTuple, e::Symbolics.AbstractArray, ne, pe, i_app)::NamedTuple
+@register_symbolic U₀_f(params::BatteryParameters, ne, pe)
+@register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app)
+@register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray) 
+@register_symbolic Δϕₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
+@register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
+@register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
     @parameters begin
@@ -28,8 +33,13 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         v(t)
         i(t)
         #Jsr(t) # Side reaction current density
-        Voc(t)
-        Vt(t)
+        U₀(t)
+        ηᵣ(t)
+        ηₑ(t)
+        Δϕₑ(t)
+        Δϕₛ(t)
+        Δϕf(t)
+        Rᵢ(t)
     end
 
     if Q==0
@@ -41,20 +51,21 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     
     # Porosity per region
     ϵ = [
-        [el.ϵₙ for _ in g.el.ixₙ] 
-        [el.ϵₛ for _ in g.el.ixₛ]
-        [el.ϵₚ for _ in g.el.ixₚ] 
+        [el.ϵₙ for _ in g.el.ixₙ]...
+        [el.ϵₛ for _ in g.el.ixₛ]...
+        [el.ϵₚ for _ in g.el.ixₚ]...
     ]
     
     eqns = [
         # Potentials
-        U₀ ~ U₀(params, ne.c_surf, pe.c_surf),
-        ηᵣ ~ ηᵣ(params, g, el.cₑ, ne.c_surf, pe.c_surf,i_app),
-        ηₑ ~ ηₑ(params,g,el.cₑ), 
-        Δϕₑ ~ Δϕₑ(params, g, el.cₑ, ϵ, i_app),
-        Δϕₛ ~ Δϕₛ(params, g, i_app),
-        Δϕf ~ Δϕf(params, g, i_app), 
+        U₀ ~ U₀_f(params, ne.c_surf, pe.c_surf),
+        ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf,i_app),
+        ηₑ ~ ηₑ_f(params,g,el.cₑ), 
+        Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
+        Δϕₛ ~ Δϕₛ_f(params, g, i_app),
+        Δϕf ~ Δϕf_f(params, g, i_app), 
         v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
+        Rᵢ ~ (U₀-v)/i,
         
         v ~ p.v - n.v,
         0 ~ p.i + n.i,

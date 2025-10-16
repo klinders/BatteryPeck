@@ -1,4 +1,4 @@
-function U₀(params::BatteryParameters, ne, pe)
+function U₀_f(params::BatteryParameters, ne, pe)
 
     cₚ = pe
     cₙ = ne
@@ -6,7 +6,7 @@ function U₀(params::BatteryParameters, ne, pe)
     U₀ = params.p.Uₖ(cₚ/params.p.c₊) - params.n.Uₖ(cₙ/params.n.c₊)
 end
 
-function ηᵣ(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe, i_app)
+function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe, i_app)
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
@@ -33,7 +33,7 @@ function ηᵣ(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractA
 end
 
 
-function ηₑ(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray)
+function ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray)
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
@@ -72,7 +72,7 @@ function ηₑ(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractA
 end
 
 
-function Δϕₑ(params::BatteryParameters, g::NamedTuple, cₑ::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
+function Δϕₑ_f(params::BatteryParameters, g::NamedTuple, cₑ::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
 
     x = g.el.x_centers
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]
@@ -112,7 +112,7 @@ function Δϕₑ(params::BatteryParameters, g::NamedTuple, cₑ::Symbolics.Abstr
 
 end
 
-function Δϕₛ(params::BatteryParameters, g::NamedTuple, i_app)
+function Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
 
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]
 
@@ -120,7 +120,7 @@ function Δϕₛ(params::BatteryParameters, g::NamedTuple, i_app)
 
 end
 
-function Δϕf(params::BatteryParameters, g::NamedTuple, i_app)
+function Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]
 
