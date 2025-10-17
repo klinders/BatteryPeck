@@ -45,4 +45,7 @@ Base.@kwdef mutable struct BatteryParameters
     
     i₀ # Typical current density for 1C in A/m^-2
     Q₀ # Original battery capacity in Ah
+
+    Vmin
+    Vmax
 end

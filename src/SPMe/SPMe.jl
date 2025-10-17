@@ -14,6 +14,14 @@ include("Potentials.jl")
 @register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
 @register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
+function affect!(u, p, ctx, integ)
+    @show typeof(integ)
+    @show typeof(u)
+    @show typeof(p)
+    @show typeof(ctx)
+    ModelingToolkit.terminate!(integ)
+end
+
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
     @parameters begin
         t # Time variable
@@ -80,5 +88,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         #Jₛᵣ ~ parameters.p.mₖ * pp.c_avr^1.5 * (pp.Uₖ - parameters.p.Uₖ) # Side reaction current density in the positive electrode
     ]
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el])
+    events = [ne.c[end] ~ 1200]=>(affect!,(;),(;),nothing)
+
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el], continuous_events=events)
 end
