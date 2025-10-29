@@ -6,38 +6,39 @@ function U₀_f(params::BatteryParameters, ne, pe)
     U₀ = params.p.Uₖ(cₚ/params.p.c₊) - params.n.Uₖ(cₙ/params.n.c₊)
 end
 
-function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe, i_app)
+function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe, i_app, T)
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
     T = 298 # Temperature
-
+    
     x = g.el.x_centers
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]
-
+    
     cₚ = pe
     cₙ = ne
     cₑ = el
-
+    
     jₚ = params.p.mₖ.*sqrt.(cₑ[g.el.ixₚ].*cₚ.*(params.p.c₊-cₚ))
     jₙ = params.n.mₖ.*sqrt.(cₑ[g.el.ixₙ].*cₙ.*(params.n.c₊-cₙ))
-
+    
     asin_p = asinh.(i_app./params.p.aₖ./Lₚ./jₚ)
     asin_n = asinh.(i_app./params.n.aₖ./Lₙ./jₙ)
-
+    
     sum_p = ∫(asin_p, x[g.el.ixₚ])
     sum_n = ∫(asin_n, x[g.el.ixₙ])
-
+    
     ηᵣ = -2*R*T/F*(sum_p/Lₚ + sum_n/Lₙ)
+    @show typeof(ηᵣ)
+    return ηᵣ
 
 end
 
-
-function ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray)
+function ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, T)
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
-    T = 298 # Temperature
+    # T = 298 # Temperature
 
     x = g.el.x_centers
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]
@@ -70,7 +71,6 @@ function ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.Abstrac
     ηₑ = 2*R*T/F*(int1_p/Lₚ - int1_n/Lₙ)
 
 end
-
 
 function Δϕₑ_f(params::BatteryParameters, g::NamedTuple, cₑ::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
 

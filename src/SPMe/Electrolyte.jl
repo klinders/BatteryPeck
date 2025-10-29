@@ -8,12 +8,12 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     @constants begin
         R = 8.314 # Universal gas constant
         F = 96485 # Faraday's constant
-        T = 298 # Temperature
     end
     
     Dt = Differential(t)
 
     @named i_app = RealInput() # Electrolyte current density
+    @named T = RealInput()
 
     @variables begin
         # Electrolyte concentration in mol*m^-3
@@ -93,48 +93,5 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
     ]
 
-    System(eqns, t; name=name,systems=[i_app])
-end
-
-function ϕₑ(params::BatteryParameters, g, el, i_app)
-    R = 8.314 # Universal gas constant
-    F = 96485 # Faraday's constant
-    T = 298 # Temperature
-
-    Nx = g.Nx
-    ixₙ = g.ixₙ
-    Δx = g.Δx
-    Δxₗ = g.Δxₗ
-    Δxᵣ = g.Δxᵣ
-    x = g.x_centers
-
-    # Bruggeman coefficients per region
-    b = [
-        [params.e.bₙ for _ in g.ixₙ] 
-        [params.e.bₛ for _ in g.ixₛ]
-        [params.e.bₚ for _ in g.ixₚ] 
-    ]
-    # Porosity per region
-    ϵ = [
-        [params.e.ϵₙ for _ in g.ixₙ] 
-        [ϵₛ for _ in g.ixₛ]
-        [ϵₚ for _ in g.ixₚ] 
-    ]
-
-    iₑ = [
-        [i_app.u*x[i]/params.e.Lₙ for i in g.ixₙ]
-        [i_app.u for i in g.ixₛ]
-        [i_app.u*(g.L - x[i])/params.e.Lₚ for i in g.ixₚ]
-    ]
-
-    # Electrolyte potential drop
-    thermodynamic_factor = 1
-    # central difference 
-    dlogc_dx = [
-        (log(el.cₑ[2]) - log(el.cₑ[1]))/Δxᵣ[1], # Forward difference at the start
-        [(log(el.cₑ[i+1]) - log(el.cₑ[i-1]))/(Δxᵣ[i] + Δxₗ[i]) for i in 2:g.Nₜ-1]...,
-        (log(el.cₑ[end]) - log(el.cₑ[end-1]))/Δxₗ[end] # Backward difference at the end
-    ]
-    int1 = cumsum(iₑ./(params.e.σₑ(el.cₑ).*(el.ϵ.^b)).*Δx)
-    int2 = cumsum((1 .- params.e.t₊(el.cₑ)).*thermodynamic_factor.*dlogc_dx.*Δx)
+    System(eqns, t; name=name,systems=[i_app, T])
 end

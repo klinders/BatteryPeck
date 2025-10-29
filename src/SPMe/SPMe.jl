@@ -8,17 +8,13 @@ include("Electrolyte.jl")
 include("Potentials.jl")
 
 @register_symbolic U₀_f(params::BatteryParameters, ne, pe)
-@register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app)
-@register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray) 
+@register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app, T)
+@register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, T) 
 @register_symbolic Δϕₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
 @register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
 @register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
 function affect!(u, p, ctx, integ)
-    @show typeof(integ)
-    @show typeof(u)
-    @show typeof(p)
-    @show typeof(ctx)
     ModelingToolkit.terminate!(integ)
 end
 
@@ -32,6 +28,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # Electrical ports
     @named p = Pin()
     @named n = Pin()
+    @named T = RealInput(guess=298)
+    @named Q = RealOutput()
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
@@ -65,10 +63,15 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ]
     
     eqns = [
-        # Potentials
+        # Temps
+        el.T.u ~ T.u,
+        pe.T.u ~ T.u,
+        ne.T.u ~ T.u,
+
+        # # Potentials
         U₀ ~ U₀_f(params, ne.c_surf, pe.c_surf),
-        ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf,i_app),
-        ηₑ ~ ηₑ_f(params,g,el.cₑ), 
+        ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf, i_app, T.u),
+        ηₑ ~ ηₑ_f(params, g, el.cₑ, T.u),
         Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
         Δϕₛ ~ Δϕₛ_f(params, g, i_app),
         Δϕf ~ Δϕf_f(params, g, i_app), 
@@ -88,7 +91,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         #Jₛᵣ ~ parameters.p.mₖ * pp.c_avr^1.5 * (pp.Uₖ - parameters.p.Uₖ) # Side reaction current density in the positive electrode
     ]
 
-    events = [ne.c[end] ~ 1200]=>(affect!,(;),(;),nothing)
+    # Event not working yet
+    # events = [ne.c[end] ~ 1200]=>(affect!,(;),(;),nothing)
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el], continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
 end

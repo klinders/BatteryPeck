@@ -9,10 +9,10 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
     @constants begin
         R = 8.314 # Universal gas constant
         F = 96485 # Faraday's constant
-        T = 298 # Temperature
     end
 
     @named J = RealInput()
+    @named T = RealInput()
 
     # Time derivative operator
     Dt = Differential(t)
@@ -24,7 +24,6 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         c_surf(t)
         U₀(t)
         z(t)
-
     end
 
     # Discretized equations
@@ -49,5 +48,5 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     ]
 
-    System(eqns,t; name=name,systems=[J])
+    System(eqns,t; name=name,systems=[J, T])
 end
