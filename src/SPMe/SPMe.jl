@@ -92,8 +92,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         #Jₛᵣ ~ parameters.p.mₖ * pp.c_avr^1.5 * (pp.Uₖ - parameters.p.Uₖ) # Side reaction current density in the positive electrode
     ]
 
-    # Event not working yet
+    # Event work but very slow
     events = [v ~ params.Vmin, v ~ params.Vmax]=>(affect!,(;))
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
 end
