@@ -9,6 +9,6 @@ ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 
 [compat]
-ModelingToolkit = "10"
-ModelingToolkitStandardLibrary = "2"
-OrdinaryDiffEq = "6.102.1"
+ModelingToolkit = "^10.26.1"
+ModelingToolkitStandardLibrary = "^2"
+OrdinaryDiffEq = "^6.102.1"

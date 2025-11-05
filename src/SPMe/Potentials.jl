@@ -29,7 +29,7 @@ function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.Abstrac
     sum_n = ∫(asin_n, x[g.el.ixₙ])
     
     ηᵣ = -2*R*T/F*(sum_p/Lₚ + sum_n/Lₙ)
-    @show typeof(ηᵣ)
+
     return ηᵣ
 
 end

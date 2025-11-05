@@ -14,8 +14,9 @@ include("Potentials.jl")
 @register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
 @register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
-function affect!(u, p, ctx, integ)
-    ModelingToolkit.terminate!(integ)
+function affect!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    return (;)
 end
 
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
@@ -29,7 +30,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named p = Pin()
     @named n = Pin()
     @named T = RealInput(guess=298)
-    @named Q = RealOutput()
+    # @named Q = RealOutput()
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
@@ -92,7 +93,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ]
 
     # Event not working yet
-    # events = [ne.c[end] ~ 1200]=>(affect!,(;),(;),nothing)
+    events = [v ~ params.Vmin, v ~ params.Vmax]=>(affect!,(;))
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
 end
