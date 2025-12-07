@@ -5,10 +5,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         t # Time variable
     end
     
-    @constants begin
-        R = 8.314 # Universal gas constant
-        F = 96485 # Faraday's constant
-    end
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
     
     Dt = Differential(t)
 

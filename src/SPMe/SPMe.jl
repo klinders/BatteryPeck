@@ -30,6 +30,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named p = Pin()
     @named n = Pin()
     @named T = RealInput(guess=298)
+    # @named I = RealInput(guess=0.0)
+
     # @named Q = RealOutput()
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
@@ -62,6 +64,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [el.ϵₛ for _ in g.el.ixₛ]...
         [el.ϵₚ for _ in g.el.ixₚ]...
     ]
+
+    D = Differential(t)
     
     eqns = [
         # Temps
@@ -79,7 +83,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
         Rᵢ ~ (U₀-v)/i,
         
-        v ~ p.v - n.v,
+        # i ~ I.u,
+        v ~ p.v + n.v,
         0 ~ p.i + n.i,
         i ~ p.i,
 
@@ -93,7 +98,14 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ]
 
     # Event work but very slow
-    events = [v ~ params.Vmin, v ~ params.Vmax]=>(affect!,(;))
+    events = [
+        [
+            v ~ params.Vmin, 
+            v ~ params.Vmax,
+            pe.c_surf ~ params.p.c₊*0.99,
+            ne.c_surf ~ params.n.c₊*0.99,        
+        ]=>(affect!,(;)),
+    ]
 
     return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
 end

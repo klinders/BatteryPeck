@@ -6,10 +6,8 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         t
     end
 
-    @constants begin
-        R = 8.314 # Universal gas constant
-        F = 96485 # Faraday's constant
-    end
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
 
     @named J = RealInput()
     @named T = RealInput()
@@ -29,11 +27,11 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
     # Discretized equations
     Δr,r,Vᵢ,Aₗ,Aᵣ = g.Δr, g.r, g.Vᵢ, g.Aₗ, g.Aᵣ
     Dₗ = [nothing, [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:g.Nᵣ]...] # Left diffusivities
-    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]..., nothing] # Left diffusivities
+    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]..., nothing] # Right diffusivities
 
     eqns = [
         c_avr ~ sum(c)/g.Nᵣ
-        c_surf ~ c[g.Nᵣ] # Surface concentration
+        c_surf ~ 1.5*c[end] - 0.5*c[end-1] # Surface concentration
         z ~ c_surf/p.c₊ # Stoichiometry
         U₀ ~ p.Uₖ(z) # Open-circuit potential
 
