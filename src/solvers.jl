@@ -1,6 +1,5 @@
-module Solvers
 
-# using DifferentialEquations
+using ModelingToolkit, OrdinaryDiffEq, CSV, Tables
 # using ..PackModel
 # using ..CellModel
 # export solve, Model, Experiment, Simulation, Step, CurrentStep
@@ -9,70 +8,56 @@ module Solvers
 #     return 2.0  # Constant discharge of 2A
 # end
 
+abstract type Step end
 
-struct Step
-    current::Function
-    period::Int
-    function Step(current::Function,period::Int)
-        new(current,period)
-    end
-    function Step(current::Number, period::Int)
-        new(x->current,period)
-    end
-end
-
-struct CurrentStep <: Step
-    current::Float64
+struct PowerStep <: Step
+    value::Float64
     period::Float64
 end
 
-# struct PowerStep <: Step
-#     power::Float64
-#     period::Float64
-# end
+struct DriveStep <: Step
+    csv::Vector{Any}
+    period::Float64
+    DriveStep(file::String, period::Float64=nothing) = begin
+        f = CSV.File(file) |> Tables.matrix
+        t = f[:,1]
+        p = f[:,2]
+        dt = diff(t)
+        tend = t[end]
+        if !isnothing(period) && period < tend
+            tend = findfirst(t.>=period)
+        end
 
-# function solve_model(du, u, p, t)
-#     # Unpack the model parameters
-#     model = p.model
-#     if model.is_valid
-#         # Call the model's objective function
-#         model.objective(du, u, model.params, t)
-#     else
-#         error("Model is not valid")
-#     end
-# end
-
-
-
-Base.@kwdef mutable struct Experiment
-    steps::Vector{Step}
-    is_valid::Bool=false
-    function Experiment(a::Vector{Step})
-        # Do some validation
-        is_valid = true
-
-        # Set the values
-        x = new(a)
-        x.is_valid = is_valid
-
-        x
+        return new([dt[1:tend], p[1:tend]], tend)
     end
 end
 
-Base.@kwdef mutable struct Simulation
-    model::Model
-    experiment::Experiment
+function step!(sys, integrator::SciMLBase.DEIntegrator, step::PowerStep)
+    set_u!(integrator, sys.power.u, step.value)
+    u_modified!(integrator, true)
+    OrdinaryDiffEq.step!(integrator, step.period, true)
 end
 
-function solve(sim::Simulation, tspan=(0,100))
-      
-    f = ODEFunction(sim.model.objective)
+function step!(sys, integrator::SciMLBase.DEIntegrator, step::DriveStep)
+    print("Stepping $(length(step.csv[1])) steps\n")
+    for (dt, value) in zip(step.csv[1], step.csv[2])
+        set_u!(integrator, sys.power.u, -value)
+        u_modified!(integrator, true)
+        OrdinaryDiffEq.step!(integrator, dt, true)
+    end
+end
 
-    sim.model.params.I = constant_current# experiment_current(sim.experiment)
+function solve(sys::ModelingToolkit.System, experiment::Vector{Step})
+    tend = sum(s.period for s in experiment)
+    print("Simulating for: $tend seconds\n")
 
-    prob = ODEProblem(f, sim.model.params.u0, tspan, sim.model.params)
+    prob = ODEProblem(sys, [sys.power.u=>0], (0.0, tend))
     
-    return DifferentialEquations.solve(prob)
-end
+    integrator = init(prob, reltol = 1e-4, abstol = 1e-6, saveat=60.0)
 
-end  # module Solvers
+    for s in experiment
+        step!(sys, integrator, s)
+    end
+
+    return integrator.sol
+end

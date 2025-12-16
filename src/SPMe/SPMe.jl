@@ -14,7 +14,7 @@ include("Potentials.jl")
 @register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
 @register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
 
-function affect!(mod,obs,ctx,int)
+function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
     return (;)
 end
@@ -100,12 +100,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # Event work but very slow
     events = [
         [
-            v ~ params.Vmin, 
+            v ~ params.Vmin,
             v ~ params.Vmax,
             pe.c_surf ~ params.p.c₊*0.99,
-            ne.c_surf ~ params.n.c₊*0.99,        
-        ]=>(affect!,(;)),
+            ne.c_surf ~ params.n.c₊*0.99,
+        ]=>(abort!,(;))
     ]
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
 end

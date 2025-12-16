@@ -9,8 +9,8 @@ include("ParameterSets/Base.jl")
 include("helpers.jl")
 include("ParameterSets/Chen2020.jl")
 include("SPMe/SPMe.jl")
-# include("PackModels/SingleCellPack.jl")
+include("solvers.jl")
 
-export SPMe, Chen2020, BatteryParameters
+export SPMe, Chen2020, BatteryParameters, PowerStep, DriveStep, Step
 
 end  # module BatteryPeck
