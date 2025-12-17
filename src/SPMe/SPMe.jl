@@ -107,5 +107,5 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ]=>(abort!,(;))
     ]
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
 end
