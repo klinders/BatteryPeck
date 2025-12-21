@@ -62,7 +62,7 @@ function Chen2020()
         e = e,
         i₀ = 48.69, # Typical current density for 1C in A/m^-2
         Q₀ = 5, # Original battery capacity in Ah
-        Vmin = 2,
-        Vmax = 4.5
+        Vmin = 2.5,
+        Vmax = 4.2
     )
 end

@@ -26,8 +26,8 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     # Discretized equations
     Δr,r,Vᵢ,Aₗ,Aᵣ = g.Δr, g.r, g.Vᵢ, g.Aₗ, g.Aᵣ
-    Dₗ = [nothing, [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:g.Nᵣ]...] # Left diffusivities
-    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]..., nothing] # Right diffusivities
+    Dₗ = [nothing; [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:g.Nᵣ]] # Left diffusivities
+    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]; nothing] # Right diffusivities
 
     eqns = [
         c_avr ~ sum(c)/g.Nᵣ

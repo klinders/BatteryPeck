@@ -1,0 +1,109 @@
+using CSV, Tables
+using SciMLBase
+using ModelingToolkit
+
+abstract type Step end
+
+struct RestStep <: Step
+    period::Real
+end
+
+struct ChargeStep <: Step
+    soc::Real
+    period::Real
+    power::Real
+    ChargeStep(soc::Real, period::Real=0, power::Real=11000) = new(soc,period,power)
+end
+
+struct PowerStep <: Step
+    value::Real
+    period::Real
+end
+
+struct DriveStep <: Step
+    csv::Vector{Any}
+    period::Real
+    DriveStep(file::String, period::Real=nothing) = begin
+        f = CSV.File(file) |> Tables.matrix
+        t = f[:,1]
+        p = f[:,2]
+        dt = diff(t)
+        tend = Int64(t[end]-1)
+        if !isnothing(period) && period < tend
+            tend = findfirst(t.>=period)
+        end
+
+        return new([dt[1:tend], p[1:tend]], tend)
+    end
+end
+
+function get_p0(s::PowerStep)
+    return -s.value
+end
+
+function get_p0(s::DriveStep)
+    return -s.csv[2][1]
+end
+
+function get_p0(s::ChargeStep)
+    return -s.power
+end
+
+function get_p0(s::RestStep)
+    return 0
+end
+
+struct Experiment
+    steps::Array{Step}
+    tstops::Array{Float64}
+    tend::Float64
+    step_count::Int64
+    p0::Float64
+    Experiment(steps::Vector{T} where T<:Step) = begin
+        tstops = cumsum([s.period for s in steps])
+        tend = tstops[end]
+        # Remove the last Tstop since it is the end of the simulation
+        pop!(tstops)
+        step_count = length(steps)
+        p0 = get_p0(steps[1])
+        return new(steps, tstops, tend, step_count, p0)
+    end
+end
+
+function Base.:*(a::AbstractVector{<:Step}, n::Integer)
+    return repeat(a,n)
+end
+
+function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
+    set_u!(integrator, sys.P, -step.value)
+    u_modified!(integrator, true)
+    OrdinaryDiffEq.step!(integrator, step.period, true)
+end
+
+function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::RestStep)
+    set_u!(integrator, sys.P, 0)
+    u_modified!(integrator, true)
+    OrdinaryDiffEq.step!(integrator, step.period, true)
+end
+
+function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::ChargeStep)
+    soc = integrator.sol[sys.cell.soc][end]
+    end_soc = step.soc
+    t_start = integrator.t
+
+    while soc < end_soc || integrator.t - t_start > step.period
+        set_u!(integrator, sys.P, step.power)
+        u_modified!(integrator, true)
+        OrdinaryDiffEq.step!(integrator, 60, true)
+        soc = integrator.sol[sys.cell.soc][end]
+    end
+end
+
+function step!(integrator::SciMLBase.DEIntegrator,sys::ModelingToolkit.AbstractSystem, step::DriveStep)
+    # print("Stepping $(length(step.csv[1])) steps\n")
+    for (dt, value) in zip(step.csv[1], step.csv[2])
+        set_u!(integrator, sys.P, -value)
+        u_modified!(integrator, true)
+        OrdinaryDiffEq.step!(integrator, dt, true)
+    end
+end

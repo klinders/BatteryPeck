@@ -41,6 +41,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         # Terminal voltage and current
         v(t)
         i(t)
+        soc(t)
         #Jsr(t) # Side reaction current density
         U₀(t)
         ηᵣ(t)
@@ -60,9 +61,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     
     # Porosity per region
     ϵ = [
-        [el.ϵₙ for _ in g.el.ixₙ]...
-        [el.ϵₛ for _ in g.el.ixₛ]...
-        [el.ϵₚ for _ in g.el.ixₚ]...
+        [el.ϵₙ for _ in g.el.ixₙ];
+        [el.ϵₛ for _ in g.el.ixₛ];
+        [el.ϵₚ for _ in g.el.ixₚ];
     ]
 
     D = Differential(t)
@@ -72,6 +73,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.T.u ~ T.u,
         pe.T.u ~ T.u,
         ne.T.u ~ T.u,
+        soc ~ ne.z,
 
         # # Potentials
         U₀ ~ U₀_f(params, ne.c_surf, pe.c_surf),
@@ -107,5 +109,5 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ]=>(abort!,(;))
     ]
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T])#, continuous_events=events)
+    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
 end
