@@ -37,12 +37,24 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
 
+    submodels = [p,n,T,pe,ne,el]
+    
+    # if !isnothing(params.sei)
+    #     @named sei = SideReaction(name="SEI side reaction", p=params.sei)
+    #     push!(submodels, sei)
+    # end
+
+    # if !isnothing(params.li_plating)
+    #     @named plating = SideReaction(name="Lithium Plating", p=params.sei)
+    #     push!(submodels, plating)
+    # end
+
     @variables begin
         # Terminal voltage and current
         v(t)
         i(t)
         soc(t)
-        #Jsr(t) # Side reaction current density
+
         U₀(t)
         ηᵣ(t)
         ηₑ(t)
@@ -109,5 +121,5 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ]=>(abort!,(;))
     ]
 
-    return System(eqns, t; name=name,systems=[p,n, pe, ne, el, T], continuous_events=events)
+    return System(eqns, t; name=name,systems=submodels, continuous_events=events)
 end

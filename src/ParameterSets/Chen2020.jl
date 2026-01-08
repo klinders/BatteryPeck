@@ -1,5 +1,27 @@
 # include("Base.jl")
 
+sei_parameters = SideReactionParameters(
+    k = 1.0e-10, # Reaction rate
+    α = 0.5, # Side reaction transfer coefficient
+    M = 0.162, # Molar mass of SR product
+    n = 1, # Number of electrons transferred in SR
+    ρ = 1690, # Density of SR product
+    U = 0.4, # Open circuit potential of SR
+    Lf₀ = 1e-9, # Initial thickness of SR film
+    c = (el) -> nothing # Concentration dependence function
+)
+
+plating_parameters = SideReactionParameters(
+    k = 1.0e-10, # Reaction rate
+    α = 0.5, # Side reaction transfer coefficient
+    M = 0.162, # Molar mass of SR product
+    n = 1, # Number of electrons transferred in SR
+    ρ = 1690, # Density of SR product
+    U = 0.4, # Open circuit potential of SR
+    Lf₀ = 1e-9, # Initial thickness of SR film
+    c = (el) -> nothing # Concentration dependence function
+)
+
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
     aₖ = 3.84e5, # Surface area density in m^-1
@@ -10,17 +32,13 @@ n = SolidParticleParameters(
     # Open-circuit potential in V
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
     mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
-    
-    # SEI parameters
-    k_sei = 1e-12, # SEI reaction rate constant in m/s
-    c_sei₀ = 4541, # Initial SEI concentration in mol/m^3
-    U_sei = 0.0, # SEI equilibrium potential in V
-    D_sei = 2e-19, # SEI diffusivity in m^2/s
-    M_sei = 0.162, # SEI molar mass in kg/mol
-    ρ_sei = 1690, # SEI film density in kg/m^-3
-    n_sei = 2, # SEI reaction order
-    σ_sei = 5e-6, # SEI film conductivity in S/m
-    L_sei₀ = 5e-9, # Initial SEI film thickness in
+    L_sei₀ = 1e-9,
+
+    # Side reactions
+    side_reactions = [
+        sei_parameters,
+        plating_parameters
+    ]
 )
 
 p = SolidParticleParameters(
@@ -32,7 +50,9 @@ p = SolidParticleParameters(
     c₊ = 63104, # Maximum electrode concentration in mol*m^-3
     # Open-circuit potential in V
     Uₖ = z->-0.8090*z + 4.4875 - 0.0428*tanh(18.5138*(z-0.5542)) - 17.7326*tanh(15.7890*(z-0.3117)) + 17.5842*tanh(15.9308*(z-0.3120)), 
-    mₖ = 3.42e-6 # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
+    mₖ = 3.42e-6, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
+    L_sei₀ = 0,
+
 )
 
 e = ElectrolyteParameters(
@@ -54,6 +74,8 @@ e = ElectrolyteParameters(
     bₛ = 1.5,
     bₙ = 1.5,
 )
+
+
 
 function Chen2020()
     return BatteryParameters(
