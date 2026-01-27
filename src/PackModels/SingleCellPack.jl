@@ -1,11 +1,16 @@
 using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
 using BatteryPeck
 
 function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
+
+    @parameters
+        t # Time variable
+    end
+
+    D = Differential(t)
 
     @variables begin 
         P(t)=0, [input=true]
