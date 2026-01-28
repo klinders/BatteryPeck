@@ -20,6 +20,11 @@ struct PowerStep <: Step
     period::Real
 end
 
+struct CurrentStep <: Step
+    value::Real
+    period::Real
+end
+
 struct DriveStep <: Step
     csv::Vector{Any}
     period::Real
@@ -39,6 +44,10 @@ end
 
 function get_p0(s::PowerStep)
     return -s.value
+end
+
+function get_p0(s::CurrentStep)
+    return -s.value*4
 end
 
 function get_p0(s::DriveStep)
@@ -91,11 +100,22 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
     end_soc = step.soc
     t_start = integrator.t
 
-    while soc < end_soc || integrator.t - t_start > step.period
+    while soc < end_soc && integrator.t - t_start < step.period
         set_u!(integrator, sys.P, step.power)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 60, true)
         soc = integrator.sol[sys.cell.soc][end]
+    end
+end
+
+function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::CurrentStep)
+    t_start = integrator.t
+
+    while integrator.t - t_start < step.period
+        v = integrator.sol[sys.V][end]
+        set_u!(integrator, sys.P, -step.value*v)
+        u_modified!(integrator, true)
+        OrdinaryDiffEq.step!(integrator, 1, true)
     end
 end
 

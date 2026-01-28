@@ -1,11 +1,3 @@
-function U₀_f(params::BatteryParameters, ne, pe)
-
-    cₚ = pe
-    cₙ = ne
-
-    U₀ = params.p.Uₖ(cₚ/params.p.c₊) - params.n.Uₖ(cₙ/params.n.c₊)
-end
-
 function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe, i_app, T)
 
     R = 8.314 # Universal gas constant

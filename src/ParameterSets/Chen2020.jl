@@ -11,17 +11,6 @@ sei_parameters = SideReactionParameters(
     c = (el) -> nothing # Concentration dependence function
 )
 
-plating_parameters = SideReactionParameters(
-    k = 1.0e-10, # Reaction rate
-    α = 0.5, # Side reaction transfer coefficient
-    M = 0.162, # Molar mass of SR product
-    n = 1, # Number of electrons transferred in SR
-    ρ = 1690, # Density of SR product
-    U = 0.4, # Open circuit potential of SR
-    Lf₀ = 1e-9, # Initial thickness of SR film
-    c = (el) -> nothing # Concentration dependence function
-)
-
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
     aₖ = 3.84e5, # Surface area density in m^-1
@@ -33,12 +22,7 @@ n = SolidParticleParameters(
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
     mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
     L_sei₀ = 1e-9,
-
-    # Side reactions
-    side_reactions = [
-        sei_parameters,
-        plating_parameters
-    ]
+    side_reactions = [sei_parameters]
 )
 
 p = SolidParticleParameters(

@@ -6,7 +6,7 @@ using BatteryPeck
 
 function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
 
-    @parameters
+    @parameters begin
         t # Time variable
     end
 

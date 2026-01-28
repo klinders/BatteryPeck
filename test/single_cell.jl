@@ -1,14 +1,22 @@
 using ModelingToolkit
 using BatteryPeck
 using Plots
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkitStandardLibrary.Electrical
 
-@mtkbuild sys = SingleCellPack(config=(96,2), Qcell=78);
+p = Chen2020()
 
-e = Experiment([
-    PowerStep(11000, 500),
-    RestStep(8*3600),
-]*7)
+@mtkbuild sys = SingleCellPack()
 
-@time sol = simulate(sys,e, saveat=1);
+exp = Experiment([
+    PowerStep(20, 3600)
+])
 
-plot(sol, vars=(sys.t, sys.V), xlabel="Time (s)", ylabel="Cell Voltage (V)", title="Single Cell Voltage Response")
+@time sol = simulate(sys, exp)
+
+plot(sol[sys.t], sol[sys.source.v])
+# plot(sol, vars=(sys.t, sys.cell.el.ηₑ), xlabel="Time (s)", ylabel="Electrolyte Potential Drop (V)", title="Electrolyte Potential Drop over Time")
+# plot!(sol, vars=(sys.t, sys.cell.ηₑ2), xlabel="Time (s)", ylabel="Electrolyte Potential Drop (V)", title="Electrolyte Potential Drop over Time")
+
+
+# plot(sol, vars=(sys.t, sys.V), xlabel="Time (s)", ylabel="Cell Voltage (V)", title="Single Cell Voltage Response")

@@ -3,8 +3,8 @@ Pkg.activate(".")
 
 using BatteryPeck
 
-using ModelingToolkit, DifferentialEquations, ModelingToolkitStandardLibrary.Blocks, ModelingToolkitStandardLibrary.Electrical
-using ModelingToolkit: t_nounits as t
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Blocks, ModelingToolkitStandardLibrary.Electrical
 
 params = Chen2020()
 
@@ -18,15 +18,21 @@ Ns = [1, 10, 100]
 
     @components begin
         current = Constant(k=-5)
+        temperature = Constant(k=298)
         source = Current() # Current source
-        battery = [SPMe(name=Symbol("battery_$i"), params=params) for i in 1:Ncell] # Battery model
+        ground = Ground()
+        cell = [SPMe(name=Symbol("battery_$i"), params=p) for i in 1:Ncell] # Battery model
     end
 
     @equations begin
         connect(current.output, source.I)
-        connect(source.p, battery[1].p)
-        [connect(battery[i].n, battery[i+1].p) for i in 1:Ncell-1]...
-        connect(source.n, battery[end].n)
+        connect(source.p, cell[1].p)
+        if Ncell > 1
+            [connect(cell[i].n, cell[i+1].p) for i in 1:Ncell-1]...
+        end
+        connect(source.n, cell[end].n)
+        connect(ground.g, source.n)
+        [connect(temperature.output, cell[i].T) for i in 1:Ncell]...
     end
 end
 

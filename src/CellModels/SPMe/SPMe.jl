@@ -6,8 +6,8 @@ using ModelingToolkitStandardLibrary.Electrical
 include("SolidParticle.jl")
 include("Electrolyte.jl")
 include("Potentials.jl")
+# include("SEIGrowth.jl")
 
-@register_symbolic U₀_f(params::BatteryParameters, ne, pe)
 @register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app, T)
 @register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, T) 
 @register_symbolic Δϕₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
@@ -30,24 +30,14 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named p = Pin()
     @named n = Pin()
     @named T = RealInput(guess=298)
-    # @named I = RealInput(guess=0.0)
 
     # @named Q = RealOutput()
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
+    # @named sei = SEIGrowth(p=params.n.side_reactions[1]) # Assuming first side reaction is SEI
 
     submodels = [p,n,T,pe,ne,el]
-    
-    # if !isnothing(params.sei)
-    #     @named sei = SideReaction(name="SEI side reaction", p=params.sei)
-    #     push!(submodels, sei)
-    # end
-
-    # if !isnothing(params.li_plating)
-    #     @named plating = SideReaction(name="Lithium Plating", p=params.sei)
-    #     push!(submodels, plating)
-    # end
 
     @variables begin
         # Terminal voltage and current
@@ -57,8 +47,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         U₀(t)
         ηᵣ(t)
-        ηₑ(t)
-        Δϕₑ(t)
+        ηₑ2(t)
+        Δϕₑ2(t)
         Δϕₛ(t)
         Δϕf(t)
         Rᵢ(t)
@@ -88,17 +78,17 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         soc ~ ne.z,
 
         # # Potentials
-        U₀ ~ U₀_f(params, ne.c_surf, pe.c_surf),
+        U₀ ~ pe.U₀ - ne.U₀,
         ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf, i_app, T.u),
-        ηₑ ~ ηₑ_f(params, g, el.cₑ, T.u),
-        Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
+        ηₑ2 ~ ηₑ_f(params, g, el.cₑ, T.u),
+        Δϕₑ2 ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
         Δϕₛ ~ Δϕₛ_f(params, g, i_app),
         Δϕf ~ Δϕf_f(params, g, i_app), 
-        v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
+        v ~ U₀ + ηᵣ ,#+ el.ηₑ + el.Δϕₑ + Δϕₛ + Δϕf,
         Rᵢ ~ (U₀-v)/i,
         
         # i ~ I.u,
-        v ~ p.v + n.v,
+        v ~ p.v - n.v,
         0 ~ p.i + n.i,
         i ~ p.i,
 
@@ -108,10 +98,15 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         pe.J.u ~ -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
 
-        #Jₛᵣ ~ parameters.p.mₖ * pp.c_avr^1.5 * (pp.Uₖ - parameters.p.Uₖ) # Side reaction current density in the positive electrode
+        # # Ne sei reaction
+        # sei.J.u ~ -ne.J.u, # Current density for SEI side reaction
+        # sei.T.u ~ T.u,
+        # sei.ϕₑ.u ~ el.ϕₑ.u
+        # sei.ϕₛ.u ~ ne.ϕₛ.u,
+
     ]
 
-    # Event work but very slow
+    # Event working
     events = [
         [
             v ~ params.Vmin,
