@@ -1,6 +1,6 @@
 using ModelingToolkit
 
-function SEIGrowth(; name, p::SideReactionParameters)
+function SEIGrowth(; name, p::SideReactionParameters, g)
     
     @parameters begin
         t
@@ -8,11 +8,12 @@ function SEIGrowth(; name, p::SideReactionParameters)
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
+    N = g.el.Nx[1]
 
     @named J = RealInput()
     @named T = RealInput()
-    @named ϕₑ = RealInput()
-    @named ϕₛ = RealInput()
+    @named ϕₑ = RealInputArray(nin=N)
+    @named ϕₛ = RealInputArray(nin=N)
 
     # Time derivative operator
     Dt = Differential(t)
@@ -21,10 +22,9 @@ function SEIGrowth(; name, p::SideReactionParameters)
     
     @variables begin
         # I am adding two ghost nodes for the boundary conditions
-        L_sei(t) = Lsei_0
-        j_sei(t)
-        c_ec(t)
-        η_sei(t)
+        (L_sei(t))[1:N] = Lsei_0
+        (η_sei(t))[1:N]
+        Lsei_x(t)
     end
     
     k_sei = 1
@@ -36,14 +36,14 @@ function SEIGrowth(; name, p::SideReactionParameters)
     n_sei = 2 # Number of electrons transferred in SEI reaction
     ρ_sei = 1690 # Density of SEI in kg*m^-3
     M_sei = 0.162 # Molar mass of SEI in kg*mol^-1
-
-    k_exp = k_sei * exp(-alpha * F/(R*T.u) * η_sei)
+    
+    # Scott Marquis thesis (eq. 5.92)
+    j_sei = -p.j_sei₀.*exp.(-p.α.*η_sei.*F/R/T.u)
     
     eqns = [
-        η_sei ~ ϕₛ.u - sum(ϕₑ.u)/length(ϕₑ.u) - Usei - J.u*L_sei*Rsei
-        j_sei ~ -F*c_0*k_exp/(1 + k_exp*L_sei/D_ec)
-        c_ec ~ c_0/(1 + k_exp*L_sei/D_ec)
-        Dt(L_sei) ~ -j_sei* M_sei/(n_sei*F*ρ_sei)
+        [η_sei[i] ~ ϕₛ.u[i] - ϕₑ.u[i] - Usei - J.u.*L_sei[i].*Rsei for i in 1:N]...,
+        [Dt(L_sei[i]) ~ -j_sei[i]* M_sei/(n_sei*F*ρ_sei) for i in 1:N]...,
+        Lsei_x ~ ∫(L_sei, g.el.ixₙ)/g.el.Ls[1]
     ]
 
     System(eqns,t; name=name,systems=[J, T, ϕₑ, ϕₛ])

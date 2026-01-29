@@ -8,6 +8,7 @@ sei_parameters = SideReactionParameters(
     ρ = 1690, # Density of SR product
     U = 0.4, # Open circuit potential of SR
     Lf₀ = 1e-9, # Initial thickness of SR film
+    j_sei₀ = 1.5e-07, # SEI Reaction exchangcurrent [A.m-2]
     c = (el) -> nothing # Concentration dependence function
 )
 

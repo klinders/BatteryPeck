@@ -6,7 +6,7 @@ using ModelingToolkitStandardLibrary.Electrical
 include("SolidParticle.jl")
 include("Electrolyte.jl")
 include("Potentials.jl")
-# include("SEIGrowth.jl")
+include("SEIGrowth.jl")
 
 @register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app, T)
 @register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, T) 
@@ -35,9 +35,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
-    # @named sei = SEIGrowth(p=params.n.side_reactions[1]) # Assuming first side reaction is SEI
+    @named sei = SEIGrowth(p=params.n.side_reactions[1], g=g) # Assuming first side reaction is SEI
 
-    submodels = [p,n,T,pe,ne,el]
+    submodels = [p,n,T,pe,ne,el,sei]
 
     @variables begin
         # Terminal voltage and current
@@ -47,8 +47,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         U₀(t)
         ηᵣ(t)
-        ηₑ2(t)
-        Δϕₑ2(t)
+        ηₑ(t)
+        Δϕₑ(t)
         Δϕₛ(t)
         Δϕf(t)
         Rᵢ(t)
@@ -69,7 +69,38 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ]
 
     D = Differential(t)
+
+    # X-average
+    x = g.el.x_centers
+    σ_f = 5e-6
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
+    Lsei_0 = 5e-09
+
+    ϕₑ_n = sum([
+            el.ϕₑ[1]*g.el.ixₙ[1]/2,
+            [(el.ϕₑ[i] + el.ϕₑ[i-1])*(g.el.ixₙ[i] - g.el.ixₙ[i-1])/2 for i in 2:length(g.el.ixₙ)]...,
+    ])/params.e.Lₙ
+
+    jₚ = params.p.mₖ.*sqrt.(el.cₑ[g.el.ixₚ].*pe.c_surf.*(params.p.c₊-pe.c_surf))
+    jₙ = params.n.mₖ.*sqrt.(el.cₑ[g.el.ixₙ].*ne.c_surf.*(params.n.c₊-ne.c_surf))
     
+    asin_p = asinh.(i_app./params.p.aₖ./params.e.Lₚ./jₚ)
+    asin_n = asinh.(i_app./params.n.aₖ./params.e.Lₙ./jₙ)
+    
+    sinh_x_p = 2*R*T.u/F*∫(asin_p, x[g.el.ixₚ])/params.e.Lₚ
+    
+    sinh_x_n = 2*R*T.u/F*sum([
+            asin_n[1]*g.el.ixₙ[1]/2,
+            [(asin_n[i] + asin_n[i-1])*(g.el.ixₙ[i] - g.el.ixₙ[i-1])/2 for i in 2:length(g.el.ixₙ)]...,
+    ])/params.e.Lₙ
+
+    ϕₛ = [ne.U₀ - i_app*(2*params.e.Lₙ − x[i])*x[i]/(2*params.e.Lₙ*params.n.σₖ) + i_app*params.e.Lₙ/(3*params.n.σₖ) + el.ϕₑ[i] + sinh_x_n + i_app*Lsei_0/params.e.Lₙ/params.n.aₖ/σ_f for i in g.el.ixₙ]
+    ϕₛ_n = ∫(ϕₛ, g.el.ixₙ)/params.e.Lₙ
+    
+    @show el.ϕₑ[2]
+    @show ϕₛ[2]
+
     eqns = [
         # Temps
         el.T.u ~ T.u,
@@ -80,12 +111,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         # # Potentials
         U₀ ~ pe.U₀ - ne.U₀,
         ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf, i_app, T.u),
-        ηₑ2 ~ ηₑ_f(params, g, el.cₑ, T.u),
-        Δϕₑ2 ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
+        ηₑ ~ ηₑ_f(params, g, el.cₑ, T.u),
+        Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
         Δϕₛ ~ Δϕₛ_f(params, g, i_app),
         Δϕf ~ Δϕf_f(params, g, i_app), 
-        v ~ U₀ + ηᵣ ,#+ el.ηₑ + el.Δϕₑ + Δϕₛ + Δϕf,
-        Rᵢ ~ (U₀-v)/i,
+        v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
+        Rᵢ ~ (U₀-v)/i, 
         
         # i ~ I.u,
         v ~ p.v - n.v,
@@ -99,10 +130,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
 
         # # Ne sei reaction
-        # sei.J.u ~ -ne.J.u, # Current density for SEI side reaction
-        # sei.T.u ~ T.u,
-        # sei.ϕₑ.u ~ el.ϕₑ.u
-        # sei.ϕₛ.u ~ ne.ϕₛ.u,
+        sei.J.u ~ -ne.J.u, # Current density for SEI side reaction
+        sei.T.u ~ T.u,
+        [sei.ϕₑ.u[i] ~ el.ϕₑ[i] for i in g.el.ixₙ]...,
+        [sei.ϕₛ.u[i] ~ ϕₛ[i] for i in g.el.ixₙ]...,
 
     ]
 

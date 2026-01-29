@@ -55,3 +55,10 @@ function ∫(f, x,f₀=0)
             [(f[i] + f[i-1])*(x[i] - x[i-1])/2 for i in 2:length(x)]...,
     ])
 end
+
+macro integrate(f, x, f0=0)
+    return :(sum([
+            $f[1]*$x[1]/2 + $f0,
+            [($f[i] + $f[i-1])*($x[i] - $x[i-1])/2 for i in 2:length($x)]...,
+    ]))
+end

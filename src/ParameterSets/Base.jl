@@ -24,6 +24,7 @@ Base.@kwdef mutable struct SideReactionParameters
     ρ               # Density of SR product
     U               # Open circuit potential of SR
     Lf₀             # Initial thickness of SR film
+    j_sei₀          # Reaction exchange current
     c::Function     # Concentration dependence function
 end
 
