@@ -43,7 +43,7 @@ function SEIGrowth(; name, p::SideReactionParameters, g)
     eqns = [
         [η_sei[i] ~ ϕₛ.u[i] - ϕₑ.u[i] - Usei - J.u.*L_sei[i].*Rsei for i in 1:N]...,
         [Dt(L_sei[i]) ~ -j_sei[i]* M_sei/(n_sei*F*ρ_sei) for i in 1:N]...,
-        Lsei_x ~ ∫(L_sei, g.el.ixₙ)/g.el.Ls[1]
+        Lsei_x ~ sum([L_sei[i] for i in 1:N])/N
     ]
 
     System(eqns,t; name=name,systems=[J, T, ϕₑ, ϕₛ])

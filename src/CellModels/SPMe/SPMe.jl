@@ -82,11 +82,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
             [(el.ϕₑ[i] + el.ϕₑ[i-1])*(g.el.ixₙ[i] - g.el.ixₙ[i-1])/2 for i in 2:length(g.el.ixₙ)]...,
     ])/params.e.Lₙ
 
-    jₚ = params.p.mₖ.*sqrt.(el.cₑ[g.el.ixₚ].*pe.c_surf.*(params.p.c₊-pe.c_surf))
-    jₙ = params.n.mₖ.*sqrt.(el.cₑ[g.el.ixₙ].*ne.c_surf.*(params.n.c₊-ne.c_surf))
+    j = [params.p.mₖ*sqrt(el.cₑ[i]*pe.c_surf*(params.p.c₊-pe.c_surf)) for i in 1:g.el.Nₜ]
     
-    asin_p = asinh.(i_app./params.p.aₖ./params.e.Lₚ./jₚ)
-    asin_n = asinh.(i_app./params.n.aₖ./params.e.Lₙ./jₙ)
+    asin_p = [asinh(i_app/params.p.aₖ/params.e.Lₚ/j[i]) for i in g.el.ixₚ]
+    asin_n = [asinh(i_app/params.n.aₖ/params.e.Lₙ/j[i]) for i in g.el.ixₙ]
     
     sinh_x_p = 2*R*T.u/F*∫(asin_p, x[g.el.ixₚ])/params.e.Lₚ
     
@@ -115,7 +114,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),
         Δϕₛ ~ Δϕₛ_f(params, g, i_app),
         Δϕf ~ Δϕf_f(params, g, i_app), 
-        v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
+        v ~ U₀, #+ ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,
         Rᵢ ~ (U₀-v)/i, 
         
         # i ~ I.u,
