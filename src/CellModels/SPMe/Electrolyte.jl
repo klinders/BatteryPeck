@@ -36,8 +36,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
         # Electrolyte potential
         (ϕₑ(t))[1:g.Nₜ]
-        # Δϕₑ(t)
-        # ηₑ(t)
+        Δϕₑ(t)
+        ηₑ(t)
     end
 
     function j(x)
@@ -77,7 +77,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     # Electrolyte potential drop
     B = [p.σₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
-    f1 = [-iₑ(x[i])/B[i] for i in 1:g.Nₜ]
+    f1 = [iₑ(x[i])/B[i] for i in 1:g.Nₜ]
 
     ϕₑ_r = cumsum([
         (f1[1] + iₑ(0)/B[1])*(x[1])/2,
@@ -85,12 +85,12 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     ])
 
     # X-average electrode potentials
-    ϕₑ_r_p = ∫(ϕₑ_r, x[g.ixₚ])/p.Lₚ
-    ϕₑ_r_n = ∫(ϕₑ_r, x[g.ixₙ])/p.Lₙ
+    ϕₑ_r_p = sum(ϕₑ_r[g.ixₚ])/g.Nx[3]
+    ϕₑ_r_n = sum(ϕₑ_r[g.ixₙ])/g.Nx[1]
 
     # Electrolyte reaction potential
     df_fac = ones(length(cₑ))
-    logc = log.(cₑ)
+    logc = [log(cₑ[i]) for i in 1:length(cₑ)]
 
     # central difference 
     dlogc_dx = [
@@ -101,13 +101,13 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     f2 = [(1 - p.t₊(cₑ[i]))*df_fac[i]*dlogc_dx[i] for i in 1:g.Nₜ]
 
-    ϕₑ_η = (2*R*T.u/F).*cumsum([
+    ϕₑ_η = (2*R*T.u/F)*cumsum([
         0,
         [(f2[i] + f2[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
     ])
 
-    ϕₑ_η_p = ∫(ϕₑ_η, x[g.ixₚ])/p.Lₚ
-    ϕₑ_η_n = ∫(ϕₑ_η, x[g.ixₙ])/p.Lₙ
+    ϕₑ_η_p = sum(ϕₑ_η[g.ixₚ])/g.Nx[3]
+    ϕₑ_η_n = sum(ϕₑ_η[g.ixₙ])/g.Nx[1]
         
     Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
     Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
@@ -138,9 +138,9 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
 
         # Electrolyte potential
-        [ϕₑ[i] ~ ϕₑ_r[i] + ϕₑ_η[i] for i in 1:g.Nₜ]...,
-        # Δϕₑ ~ ϕₑ_r_p - ϕₑ_r_n,
-        # ηₑ ~ ϕₑ_η_p - ϕₑ_η_n,
+        [ϕₑ[i] ~ -ϕₑ_r[i] + ϕₑ_η[i] for i in 1:g.Nₜ]...,
+        Δϕₑ ~ -ϕₑ_r_p + ϕₑ_r_n,
+        ηₑ ~ ϕₑ_η_p - ϕₑ_η_n,
     ]
 
     System(eqns, t; name=name,systems=[i_app, T])

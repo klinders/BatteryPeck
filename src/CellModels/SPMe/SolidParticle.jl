@@ -44,6 +44,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         # Boundary condition edge
         Dt(c[end]) ~ (-Aᵣ[end]*J.u/F/p.aₖ - Dₗ[end]*Aₗ[end]*(c[end] - c[end-1])/Δr)/Vᵢ[end]
 
+
     ]
 
     System(eqns,t; name=name,systems=[J, T])

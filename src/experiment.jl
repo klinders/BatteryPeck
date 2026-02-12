@@ -55,7 +55,7 @@ function get_p0(s::DriveStep)
 end
 
 function get_p0(s::ChargeStep)
-    return -s.power
+    return s.power
 end
 
 function get_p0(s::RestStep)

@@ -120,3 +120,44 @@ function Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
     Δϕf = -i_app*(Lf/Lₙ/params.n.aₖ/params.n.σₖ)
 
 end
+
+function ηᵣ_x(params::SolidParticleParameters, cₖ, cₑ, j, T)
+
+    @assert length(cₖ) == length(cₑ)
+
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
+    N = length(cₖ)
+
+    jₓ0 = [params.mₖ*sqrt(cₑ[i]*cₖ[i]*(params.c₊-cₖ[i])) for i in 1:N]
+    
+    asin = [asinh(j/params.aₖ/jₓ0[i]) for i in 1:N]
+    
+    sinh_x = 2*R*T/F*sum(asin)/N
+
+    return sinh_x
+end
+
+function ηₑ_x(params::ElectrolyteParameters, cₑ, x, T)
+    
+    @assert length(cₑ) == length(x)
+    N = length(cₑ)
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
+    
+    dcₑ_dx = [
+        (cₑ[2]-cₑ[1])/(x[2]-x[1]),
+        [(cₑ[i+1]-cₑ[i-1])/(x[i+1]-x[i-1]) for i in 2:N]...,
+        (cₑ[end]-cₑ[end-1])/(x[end]-x[end-1])
+    ]
+
+    f = [(1 - params.t₊(cₑ[i]))*dcₑ_dx[i]/cₑ[i] for i in 1:N]
+
+    int = cumsum([
+        f[1]*(x[1])/2,
+        [(f[i] + f[i-1])*(x[i]-x[i-1])/2 for i in 2:N]...,
+    ])
+
+    return 2*R*T/F*sum(int)/N
+
+end

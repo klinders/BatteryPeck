@@ -17,6 +17,7 @@ Base.@kwdef mutable struct ElectrolyteParameters
 end
 
 Base.@kwdef mutable struct SideReactionParameters
+    name            # Name of the side reaction
     k               # Reaction rate
     α               # Side reaction transfer coefficient
     M               # Molar mass of SR product

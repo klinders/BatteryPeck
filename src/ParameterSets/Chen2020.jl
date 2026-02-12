@@ -1,6 +1,7 @@
 # include("Base.jl")
 
 sei_parameters = SideReactionParameters(
+    name = :sei,
     k = 1.0e-10, # Reaction rate
     α = 0.5, # Side reaction transfer coefficient
     M = 0.162, # Molar mass of SR product
