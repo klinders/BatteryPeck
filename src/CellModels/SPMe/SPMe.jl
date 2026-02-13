@@ -116,15 +116,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         U₀ ~ pe.U₀ - ne.U₀,
         ηᵣ ~ ηᵣ_p - ηᵣ_n,
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
-        # ϕfₙ ~ i_app*Lfₙ/params.e.Lₙ/params.n.aₖ/params.n.σ,
-        # ϕfₚ ~ i_app*Lfₚ/params.e.Lₚ/params.p.aₖ/params.p.σ,
-        # Δϕf ~ ϕfₙ - ϕfₚ,
+
         [ϕₙ[i] ~ ne.U₀ + ϕₛ_n[i] + ϕₑ_n_x + ηᵣ_n - sei.ϕf_x for i in 1:g.el.Nx[1]]...,
         [ϕₚ[i] ~ pe.U₀ + ϕₛ_p[i] + ϕₑ_p_x + ηᵣ_p for i in 1:g.el.Nx[3]]...,
-        v ~ U₀ + ηᵣ + el.ηₑ,# + el.Δϕₑ,# + Δϕₛ ,#+ sei.ϕf_x,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
-        
-        # i ~ I.u,
+
         v ~ p.v - n.v,
         0 ~ p.i + n.i,
         i ~ p.i,
