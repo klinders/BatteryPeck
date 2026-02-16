@@ -33,6 +33,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
         # Actual concentration
         (cₑ(t))[1:g.Nₜ]
+        # X average concentration
+        c̄ₑ(t)
 
         # Electrolyte potential
         (ϕₑ(t))[1:g.Nₜ]
@@ -136,10 +138,13 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         
         # Actual concentration
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
+        c̄ₑ ~ sum(cₑ)/g.Nₜ,
 
         # Electrolyte potential
         [ϕₑ[i] ~ -ϕₑ_r[i] + ϕₑ_η[i] for i in 1:g.Nₜ]...,
-        Δϕₑ ~ -ϕₑ_r_p + ϕₑ_r_n,
+
+        # Marquis 2019
+        Δϕₑ ~ -i_app.u/p.σₑ(c̄ₑ)*(p.Lₙ/(3*ϵₙ^p.bₙ) + p.Lₛ/(ϵₛ^p.bₛ) + p.Lₚ/(3*ϵₚ^p.bₚ)),
         ηₑ ~ ϕₑ_η_p - ϕₑ_η_n,
     ]
 
