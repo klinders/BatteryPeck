@@ -41,6 +41,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         U₀(t)
         ηᵣ(t)
+        (ηₙ(t))[1:g.el.Nx[1]]
+        (ηₚ(t))[1:g.el.Nx[3]]
         Δϕₛ(t)
         # Δϕf(t)
         (ϕₙ(t))[1:g.el.Nx[1]]
@@ -103,8 +105,11 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     ϕₑ_n_x = sum(ϕₑ_n)/Nn
     ϕₑ_p_x = sum(ϕₑ_p)/Np
 
-    ϕₛ_n = [-i_app*(2*params.e.Lₙ - x[i])*x[i]/2/params.n.σₖ/params.e.Lₙ + i_app*params.e.Lₙ/3/params.n.σₖ for i in g.el.ixₙ]
+    ϕₛ_n = [i_app*(2*params.e.Lₙ - x[i])*x[i]/2/params.n.σₖ/params.e.Lₙ + i_app*params.e.Lₙ/3/params.n.σₖ for i in g.el.ixₙ]
     ϕₛ_p = [i_app*(2*sum(g.el.Ls[1:2]) - x[i])*x[i]/2/params.p.σₖ/params.e.Lₚ - i_app/params.e.Lₚ/6/params.p.σₖ*(3*sum(g.el.Ls)^2 - params.e.Lₚ^2) for i in g.el.ixₚ]
+
+    Δϕₙ = [ϕₛ_n[i] - el.ϕₑ[g.el.ixₙ[i]] - ne.U₀ for i in 1:Nn]
+
 
     eqns = [
         # Temps
@@ -118,8 +123,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ηᵣ ~ ηᵣ_p - ηᵣ_n,
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
-        [ϕₙ[i] ~ ne.U₀ + ϕₛ_n[i] + ϕₑ_n_x + ηᵣ_n - sei.ϕf_x for i in 1:g.el.Nx[1]]...,
+        [ϕₙ[i] ~ ne.U₀ - ϕₛ_n[i] + ϕₑ_n_x + ηᵣ_n - sei.ϕf_x for i in 1:g.el.Nx[1]]...,
         [ϕₚ[i] ~ pe.U₀ + ϕₛ_p[i] + ϕₑ_p_x + ηᵣ_p for i in 1:g.el.Nx[3]]...,
+        [ηₙ[i] ~ ϕₛ_n[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [ηₚ[i] ~ ϕₛ_p[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
 
@@ -129,6 +136,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         # Electrolyte current density
         el.i_app.u ~ i_app,
+        # el.jₙ0.u ~ jₙ0,
+        el.ϕₛn.u ~ sum(ϕₛ_n)/Nn,
+        el.Δϕₙ.u ~ sum(Δϕₙ)/Nn,
 
         pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
@@ -136,8 +146,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         # # Ne sei reaction
         sei.J.u ~ ne.J.u, # Current density for SEI side reaction
         sei.T.u ~ T.u,
-        [sei.ϕₑ.u[i] ~ el.ϕₑ[i] for i in g.el.ixₙ]...,
-        [sei.ϕₛ.u[i] ~ ϕₛ_n[i] for i in g.el.ixₙ]...,
+        [sei.ϕₑ.u[i] ~ el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [sei.ϕₛ.u[i] ~ ϕₙ[i] for i in 1:Nn]...,
 
     ]
 

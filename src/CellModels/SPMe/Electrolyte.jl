@@ -17,6 +17,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     @named i_app = RealInput() # Electrolyte current density
     @named T = RealInput()
+    @named Δϕₙ = RealInput()
+    @named ϕₛn = RealInput()
 
     @variables begin
         # Electrolyte concentration in mol*m^-3
@@ -86,34 +88,24 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [(f1[i] + f1[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
     ])
 
-    # X-average electrode potentials
-    ϕₑ_r_p = sum(ϕₑ_r[g.ixₚ])/g.Nx[3]
-    ϕₑ_r_n = sum(ϕₑ_r[g.ixₙ])/g.Nx[1]
-
     # Electrolyte reaction potential
     df_fac = ones(length(cₑ))
-    logc = [log(cₑ[i]) for i in 1:length(cₑ)]
 
-    # central difference 
-    dlogc_dx = [
-        (logc[2]-logc[1])/(x[2]-x[1]),
-        [(logc[i+1]-logc[i-1])/(x[i+1]-x[i-1]) for i in 2:g.Nₜ-1]...,
-        (logc[end]-logc[end-1])/(x[end]-x[end-1])
-    ]
-
-    f2 = [(1 - p.t₊(cₑ[i]))*df_fac[i]*dlogc_dx[i] for i in 1:g.Nₜ]
-
-    ϕₑ_η = (2*R*T.u/F)*cumsum([
-        0,
-        [(f2[i] + f2[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
-    ])
-
-    ϕₑ_η_p = sum(ϕₑ_η[g.ixₚ])/g.Nx[3]
-    ϕₑ_η_n = sum(ϕₑ_η[g.ixₙ])/g.Nx[1]
-        
     Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
     Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
+
+    # Other approach
+    cₑn = sum([cₑ[i] for i in g.ixₙ])/g.Nx[1]
+    cₑp = sum([cₑ[i] for i in g.ixₚ])/g.Nx[3]
+
+    # phi_e
+    M = sum([log(cₑ[i])/cₑ[1] for i in g.ixₙ])/g.Nx[1]
+    ie_n = sum([ϕₑ_r[i] for i in g.ixₙ])/g.Nx[1]
+
+    ϕₑ_const = -Δϕₙ.u + ϕₛn.u + (1 - p.t₊(cₑn))*df_fac[1]*M*2*R*T.u/F + ie_n
+
+    ϕₑ_f = [ϕₑ_const - (1 - p.t₊(c̄ₑ))*df_fac[i]*2*R*T.u/F*log(cₑ[i]/cₑ[1]) - ϕₑ_r[i] for i in 1:g.Nₜ]
 
     eqns = [
         # REPLACED Ce[i+1] with Ce[i] to avoid index out of bounds error...
@@ -141,12 +133,12 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         c̄ₑ ~ sum(cₑ)/g.Nₜ,
 
         # Electrolyte potential
-        [ϕₑ[i] ~ -ϕₑ_r[i] + ϕₑ_η[i] for i in 1:g.Nₜ]...,
+        [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
         # Marquis 2019
         Δϕₑ ~ -i_app.u/p.σₑ(c̄ₑ)*(p.Lₙ/(3*ϵₙ^p.bₙ) + p.Lₛ/(ϵₛ^p.bₛ) + p.Lₚ/(3*ϵₚ^p.bₚ)),
-        ηₑ ~ ϕₑ_η_p - ϕₑ_η_n,
+        ηₑ ~ -(1- p.t₊(c̄ₑ))*(cₑn - cₑp)*2*R*T.u/F/p.c₀
     ]
 
-    System(eqns, t; name=name,systems=[i_app, T])
+    System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])
 end
