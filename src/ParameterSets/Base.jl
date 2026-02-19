@@ -41,6 +41,9 @@ Base.@kwdef mutable struct SolidParticleParameters
     L_sei₀ # Initial thickness of SEI film
 
     side_reactions::Vector{SideReactionParameters} = SideReactionParameters[]
+
+    z_0 = 0.0   # Stoichiometry at 0% SOC
+    z_100 = 1.0 # Stoichiometry at 100% SOC
 end
 
 Base.@kwdef mutable struct BatteryParameters

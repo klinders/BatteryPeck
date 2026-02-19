@@ -1,8 +1,17 @@
+# =====================================================================================================================
+# Electrolyte.jl
+#
+# Electrolyte equations for SPMe
+# Source: https://doi.org/10.1016/j.apm.2022.12.009
+# =====================================================================================================================
+
+# Import package
 using ModelingToolkit
 
-function Electrolyte(;name, p::ElectrolyteParameters, g)
+function Electrolyte(; name, p::ElectrolyteParameters, g)
+    # Independent variables
     @parameters begin
-        t # Time variable
+        t # Time
     end
 
     Δx = g.Δx
@@ -10,138 +19,117 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Δxᵣ = g.Δxᵣ
     x = g.x_centers
     
+    # Time derivative
+    Dt = Differential(t)
+    
+    # Constants
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
-    
-    Dt = Differential(t)
 
-    @named i_app = RealInput() # Electrolyte current density
-    @named T = RealInput()
+    # Components
+    @named i_app = RealInput() # Applied current density in electrolyte
+    @named T = RealInput() # Ambient temperature
 
+    # Time-dependent state variables
     @variables begin
-        # Electrolyte concentration in mol*m^-3
+        # Eq. 4a LHS; [Porosity] * [Electrolyte concentration]
+        # Subdivide into total number of subdivisions over all regions to match FVM cells
         (ϵcₑ(t))[1:g.Nₜ] = [
-            [p.ϵₙ*p.c₀ for _ in g.ixₙ]...,  # Negative electrode
-            [p.ϵₛ*p.c₀ for _ in g.ixₛ]...,  # Separator
-            [p.ϵₚ*p.c₀ for _ in g.ixₚ]...,  # Positive electrode
+            # Scalar regions (single porosity scalar value per region)
+            # Initialise at c₀ (Eq. 4c)
+            [p.ϵₙ*p.c₀ for _ in g.ixₙ]..., # Negative electrode
+            [p.ϵₛ*p.c₀ for _ in g.ixₛ]..., # Separator
+            [p.ϵₚ*p.c₀ for _ in g.ixₚ]..., # Positive electrode
         ]
 
-        # Porosity
+        # Initialise porosity and define as symbolic state variable
         ϵₙ(t) = p.ϵₙ # Negative electrode
         ϵₛ(t) = p.ϵₛ # Separator
         ϵₚ(t) = p.ϵₚ # Positive electrode
 
-        # Actual concentration
+        # Define concentration as symbolic state variable (calculated in "eqns" below)
         (cₑ(t))[1:g.Nₜ]
-
-        # Electrolyte potential
-        (ϕₑ(t))[1:g.Nₜ]
-        Δϕₑ(t)
-        ηₑ(t)
     end
 
-    function j(x)
+    # Eq. 54; Spatial derivative of applied current density in electrolyte
+    function iₑ(x)
+        # Negative electrode
         if x <= p.Lₙ
             return i_app.u/p.Lₙ
+        # Separator
         elseif x <= p.Lₙ + p.Lₛ
             return 0.0
+        # Positive electrode
         else
             return -i_app.u/p.Lₚ
         end
     end
 
-    L = sum(g.Ls)
-    function iₑ(x)
-        if x <= p.Lₙ
-            return i_app.u*x/p.Lₙ
-        elseif x <= p.Lₙ + p.Lₛ
-            return i_app.u
-        else
-            return i_app.u*(L-x)/p.Lₚ
-        end
-    end
-
-    # Porosity per region
+    # Concatenate porosity vectors
     ϵ = [
-        [ϵₙ for _ in g.ixₙ] 
-        [ϵₛ for _ in g.ixₛ]
-        [ϵₚ for _ in g.ixₚ] 
+        [ϵₙ for _ in g.ixₙ] # Negative electrode
+        [ϵₛ for _ in g.ixₛ] # Separator
+        [ϵₚ for _ in g.ixₚ] # Positive electrode
     ]
 
-    # Bruggeman coefficients per region
+    # Concatenate Bruggeman coefficients vectors
     b = [
-        [p.bₙ for _ in g.ixₙ] 
-        [p.bₛ for _ in g.ixₛ]
-        [p.bₚ for _ in g.ixₚ] 
+        [p.bₙ for _ in g.ixₙ] # Negative electrode
+        [p.bₛ for _ in g.ixₛ] # Separator
+        [p.bₚ for _ in g.ixₚ] # Positive electrode
     ]
+    
+    # Retrieve FVM geometry
+    Δx = g.Δx       # Cell widths
+    Δxₗ = g.Δxₗ      # Left neighbour distances
+    Δxᵣ = g.Δxᵣ     # Right neighbour distances
+    x = g.x_centers # Cell centres
+    
+    # Eq. 4a RHS; Effective diffusivity (transport efficiency, a.k.a. inverse MacMullin number, calculated using Bruggeman coefficient)
+    Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
+    # Face diffusivities (see "helpers.jl" for explanation and source)
+    # Outer most cells have only one neighbour
+    Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...] # Left neighbours
+    Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing] # Right neighbours
 
-    # Electrolyte potential drop
-    B = [p.σₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
-    f1 = [iₑ(x[i])/B[i] for i in 1:g.Nₜ]
-
-    ϕₑ_r = cumsum([
-        (f1[1] + iₑ(0)/B[1])*(x[1])/2,
-        [(f1[i] + f1[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
-    ])
-
-    # X-average electrode potentials
-    ϕₑ_r_p = sum(ϕₑ_r[g.ixₚ])/g.Nx[3]
-    ϕₑ_r_n = sum(ϕₑ_r[g.ixₙ])/g.Nx[1]
-
-    # Electrolyte reaction potential
-    df_fac = ones(length(cₑ))
-    logc = [log(cₑ[i]) for i in 1:length(cₑ)]
-
-    # central difference 
-    dlogc_dx = [
-        (logc[2]-logc[1])/(x[2]-x[1]),
-        [(logc[i+1]-logc[i-1])/(x[i+1]-x[i-1]) for i in 2:g.Nₜ-1]...,
-        (logc[end]-logc[end-1])/(x[end]-x[end-1])
-    ]
-
-    f2 = [(1 - p.t₊(cₑ[i]))*df_fac[i]*dlogc_dx[i] for i in 1:g.Nₜ]
-
-    ϕₑ_η = (2*R*T.u/F)*cumsum([
-        0,
-        [(f2[i] + f2[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
-    ])
-
-    ϕₑ_η_p = sum(ϕₑ_η[g.ixₚ])/g.Nx[3]
-    ϕₑ_η_n = sum(ϕₑ_η[g.ixₙ])/g.Nx[1]
-        
-    Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
-    Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
-    Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
-
+    # Electrolyte equations
     eqns = [
-        # REPLACED Ce[i+1] with Ce[i] to avoid index out of bounds error...
-        
-        # Boundary condition at the start
-        Dt(ϵcₑ[1]) ~ (Dᵣ[1]*(cₑ[2] - cₑ[1])/Δxᵣ[1] + (1-p.t₊(cₑ[1]))*j(x[1])*Δx[1]/F)/Δx[1], 
-        
-        # Full region
-        [Dt(ϵcₑ[i]) ~ 
-        (Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] - Dₗ[i]*(cₑ[i] - cₑ[i-1])/Δxₗ[i] + 
-        (1-p.t₊(cₑ[i]))*j(x[i])*Δx[i]/F)/Δx[i]
-        for i in 2:g.Nₜ-1]...,
-        
-        # Boundary condition at the end
-        Dt(ϵcₑ[end]) ~ (-Dₗ[end]*(cₑ[end] - cₑ[end-1])/Δxₗ[end] + (1-p.t₊(cₑ[end]))*j(x[end])*Δx[end]/F)/Δx[end], 
+        # FVM gradient = (c[i+1]-c[i])/Δx[i]   or  (c[i]-c[i-1])/Δx[i]
+        # FVM 1D divergence = (flux_right - flux_left)/width_cell
 
-
-        # Porosity (assumed constant)
-        Dt(ϵₙ) ~ 0,
-        Dt(ϵₛ) ~ 0,
-        Dt(ϵₚ) ~ 0,
+        # Porosity (assumed constant, without side reactions)
+        Dt(ϵₙ) ~ 0, # Negative electrode
+        Dt(ϵₛ) ~ 0, # Separator
+        Dt(ϵₚ) ~ 0, # Positive electrode
         
-        # Actual concentration
+        # Concentration in electrolyte
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
 
-        # Electrolyte potential
-        [ϕₑ[i] ~ -ϕₑ_r[i] + ϕₑ_η[i] for i in 1:g.Nₜ]...,
-        Δϕₑ ~ -ϕₑ_r_p + ϕₑ_r_n,
-        ηₑ ~ ϕₑ_η_p - ϕₑ_η_n,
+        # Eq. 4a;
+        # Left most cell (no flux from/to left neighbour)
+        Dt(ϵcₑ[1]) ~ 
+            (
+            Dᵣ[1] * (cₑ[2]-cₑ[1]) / Δxᵣ[1] 
+            + (1 - p.t₊(cₑ[1])) * iₑ(x[1]) * Δx[1] / F
+            ) / Δx[1], 
+
+        # Middle cells
+        [Dt(ϵcₑ[i]) ~ 
+            (
+            Dᵣ[i] * (cₑ[i+1]-cₑ[i]) / Δxᵣ[i] - 
+            Dₗ[i] * (cₑ[i]-cₑ[i-1]) / Δxₗ[i] + 
+            (1 - p.t₊(cₑ[i])) * iₑ(x[i]) * Δx[i] / F
+            ) / Δx[i]
+        for i in 2:g.Nₜ-1]...,
+
+        # Right most cell (no flux from/to right neighbour)
+        Dt(ϵcₑ[end]) ~ 
+            (
+            -Dₗ[end] * (cₑ[end]-cₑ[end-1]) / Δxₗ[end]
+            + (1 - p.t₊(cₑ[end])) * iₑ(x[end]) * Δx[end] / F
+            ) / Δx[end], 
     ]
 
-    System(eqns, t; name=name,systems=[i_app, T])
+    # Construct ODESystem with equations and child components
+    System(eqns, t; name=name, systems=[i_app, T])
 end

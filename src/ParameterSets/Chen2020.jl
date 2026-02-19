@@ -1,4 +1,11 @@
+# Source [1]: https://doi.org/10.1149/1945-7111/ab9050        # Chen2020 dataset
+# Source [2]: https://doi.org/10.1016/j.electacta.2022.140700 # Regan2022 stoichiometry vs. SoC
+
+# Import base parameters
 # include("Base.jl")
+
+# Import packages
+import NaNMath # Return NaN for log or sqrt of -1 (potentially caused by electrolyte depletion at high C-rates)
 
 sei_parameters = SideReactionParameters(
     name = :sei,
@@ -24,7 +31,10 @@ n = SolidParticleParameters(
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
     mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
     L_sei₀ = 1e-9,
-    side_reactions = [sei_parameters]
+    side_reactions = [sei_parameters],
+    # Stoichiometry vs. SoC (Fig. 4, p. 7 [2])
+    z_0 = 0.0279,   # z_n at SOC = 0%
+    z_100 = 0.9014, # z_n at SOC = 100%
 )
 
 p = SolidParticleParameters(
@@ -38,7 +48,9 @@ p = SolidParticleParameters(
     Uₖ = z->-0.8090*z + 4.4875 - 0.0428*tanh(18.5138*(z-0.5542)) - 17.7326*tanh(15.7890*(z-0.3117)) + 17.5842*tanh(15.9308*(z-0.3120)), 
     mₖ = 3.42e-6, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
     L_sei₀ = 0,
-
+    # Stoichiometry vs. SoC (Fig. 4, p. 7 [2])
+    z_0 = 0.9072,   # z_p at SOC = 0%   
+    z_100 = 0.2567, # z_p at SOC = 100%
 )
 
 e = ElectrolyteParameters(
@@ -46,7 +58,7 @@ e = ElectrolyteParameters(
     Lₛ= 12e-6, # Length of the separator in m
     Lₙ= 85.2e-6, # Length of the negative electrode in m
     Dₑ= c -> 8.794e−17 * c^2 − 3.972e−13 * c + 4.862e−10, # Diffusivity in m^2*s^-1
-    σₑ= c -> 1.297e−10 * c^3 − 7.937e−5  * c^1.5 + 3.329e-3*c, # Conductivity in S*m^-1
+    σₑ= c -> 1.297e-10 * c^3 - 7.937e-5 * NaNMath.pow(c, 1.5) + 3.329e-3 * c, # Conductivity in S*m^-1
     c₀= 1000.0, # Initial electrolyte concentration in mol*m^-3
     cₜ= 1000.0, # Typical Electrolyte concentration in mol*m^-3
     t₊= c->0.2594, # transer number
@@ -60,8 +72,6 @@ e = ElectrolyteParameters(
     bₛ = 1.5,
     bₙ = 1.5,
 )
-
-
 
 function Chen2020()
     return BatteryParameters(

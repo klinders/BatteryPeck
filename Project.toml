@@ -5,18 +5,26 @@ authors = ["Koen Linders <k.s.j.linders@tudelft.nl>"]
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 ModelingToolkitStandardLibrary = "16a59e39-deab-5bd0-87e4-056b12336739"
+NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 
 [compat]
 CSV = "0.10.15"
+DifferentialEquations = "7.17.0"
 ModelingToolkit = "10.31.2"
 ModelingToolkitStandardLibrary = "2.25.0"
+NaNMath = "1.1.3"
 OrdinaryDiffEq = "^6.102.1"
 Plots = "1.41.4"
+Revise = "3.13.2"
 SciMLBase = "2.128.0"
+Symbolics = "6.58.0"
 Tables = "1.12.1"
