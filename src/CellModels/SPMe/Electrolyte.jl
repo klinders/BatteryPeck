@@ -17,8 +17,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     @named i_app = RealInput() # Electrolyte current density
     @named T = RealInput()
-    @named Δϕₙ = RealInput()
-    @named ϕₛn = RealInput()
+    @named Δϕₙ = RealInput(guess=0.0)
+    @named ϕₛn = RealInput(guess=0.0)
 
     @variables begin
         # Electrolyte concentration in mol*m^-3
@@ -37,9 +37,17 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         (cₑ(t))[1:g.Nₜ]
         # X average concentration
         c̄ₑ(t)
+        c̄ₑn(t)
+        c̄ₑs(t)
+        c̄ₑp(t)
 
         # Electrolyte potential
         (ϕₑ(t))[1:g.Nₜ]
+        ϕ̄ₑ(t)
+        ϕ̄ₑn(t), [guess=0]
+        ϕ̄ₑs(t)
+        ϕ̄ₑp(t)
+
         Δϕₑ(t)
         ηₑ(t)
     end
@@ -96,16 +104,25 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
 
     # Other approach
-    cₑn = sum([cₑ[i] for i in g.ixₙ])/g.Nx[1]
-    cₑp = sum([cₑ[i] for i in g.ixₚ])/g.Nx[3]
+    κₙ = p.σₑ(c̄ₑ)*(ϵₙ^p.bₙ)
+    κₛ = p.σₑ(c̄ₑ)*(ϵₛ^p.bₛ)
+    κₚ = p.σₑ(c̄ₑ)*(ϵₚ^p.bₚ)
 
-    # phi_e
-    M = sum([log(cₑ[i])/cₑ[1] for i in g.ixₙ])/g.Nx[1]
+    # phi_e max 1e15
+    M = [log(max(cₑ[i]/p.c₀,1e-15)) for i in 1:g.Nₜ]
+    M_n = sum(M[g.ixₙ])/g.Nx[1]
+    M_p = sum(M[g.ixₚ])/g.Nx[3]
     ie_n = sum([ϕₑ_r[i] for i in g.ixₙ])/g.Nx[1]
 
-    ϕₑ_const = -Δϕₙ.u + ϕₛn.u + (1 - p.t₊(cₑn))*df_fac[1]*M*2*R*T.u/F + ie_n
+    ϕₑ_const = -Δϕₙ.u + ϕₛn.u - (1 - p.t₊(c̄ₑn))*df_fac[1]*M_n*2*R*T.u/F - i_app.u*p.Lₙ*(1/(3*κₙ) - 1/κₛ)
 
-    ϕₑ_f = [ϕₑ_const - (1 - p.t₊(c̄ₑ))*df_fac[i]*2*R*T.u/F*log(cₑ[i]/cₑ[1]) - ϕₑ_r[i] for i in 1:g.Nₜ]
+    ϕi = [
+        [i_app.u/κₙ*(x[i]^2 - p.Lₙ^2)/(2*p.Lₙ) + i_app.u*p.Lₙ/κₛ for i in g.ixₙ]
+        [i_app.u/κₛ*x[i] for i in g.ixₛ]
+        [i_app.u/κₚ*(x[i]*(2*L - x[i]) + p.Lₚ^2 - L^2)/(2*p.Lₚ) + i_app.u*(L - p.Lₚ)/κₛ for i in g.ixₚ]
+    ]
+
+    ϕₑ_f = [ϕₑ_const + (1 - p.t₊(c̄ₑ))*df_fac[i]*2*R*T.u/F*M[i] - ϕi[i] for i in 1:g.Nₜ]
 
     eqns = [
         # REPLACED Ce[i+1] with Ce[i] to avoid index out of bounds error...
@@ -131,13 +148,21 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         # Actual concentration
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
         c̄ₑ ~ sum(cₑ)/g.Nₜ,
+        c̄ₑn ~ sum([cₑ[i] for i in g.ixₙ])/g.Nx[1],
+        c̄ₑs ~ sum([cₑ[i] for i in g.ixₛ])/g.Nx[2],
+        c̄ₑp ~ sum([cₑ[i] for i in g.ixₚ])/g.Nx[3],
 
         # Electrolyte potential
         [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
+        ϕ̄ₑ ~ sum(ϕₑ)/g.Nₜ,
+        ϕ̄ₑn ~ sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
+        ϕ̄ₑs ~ sum([ϕₑ[i] for i in g.ixₛ])/g.Nx[2],
+        ϕ̄ₑp ~ sum([ϕₑ[i] for i in g.ixₚ])/g.Nx[3],
+
         # Marquis 2019
-        Δϕₑ ~ -i_app.u/p.σₑ(c̄ₑ)*(p.Lₙ/(3*ϵₙ^p.bₙ) + p.Lₛ/(ϵₛ^p.bₛ) + p.Lₚ/(3*ϵₚ^p.bₚ)),
-        ηₑ ~ -(1- p.t₊(c̄ₑ))*(cₑn - cₑp)*2*R*T.u/F/p.c₀
+        Δϕₑ ~ -i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/κₛ + p.Lₚ/(3*κₚ)),
+        ηₑ ~ (1 - p.t₊(c̄ₑ))*(M_p - M_n)*2*R*T.u/F
     ]
 
     System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])

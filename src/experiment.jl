@@ -47,7 +47,7 @@ function get_p0(s::PowerStep)
 end
 
 function get_p0(s::CurrentStep)
-    return -s.value*4
+    return -s.value*4.2
 end
 
 function get_p0(s::DriveStep)
@@ -84,13 +84,15 @@ function Base.:*(a::AbstractVector{<:Step}, n::Integer)
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
-    set_u!(integrator, sys.P, -step.value)
+    set_u!(integrator, sys.Pin, -step.value)
+    set_u!(integrator, sys.Iin, 0)
     u_modified!(integrator, true)
     OrdinaryDiffEq.step!(integrator, step.period, true)
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::RestStep)
-    set_u!(integrator, sys.P, 0)
+    set_u!(integrator, sys.Pin, 0)
+    set_u!(integrator, sys.Iin, 0)
     u_modified!(integrator, true)
     OrdinaryDiffEq.step!(integrator, step.period, true)
 end
@@ -101,7 +103,8 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
     t_start = integrator.t
 
     while soc < end_soc && integrator.t - t_start < step.period
-        set_u!(integrator, sys.P, step.power)
+        set_u!(integrator, sys.Pin, step.power)
+        set_u!(integrator, sys.Iin, 0)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 60, true)
         soc = integrator.sol[sys.cell.soc][end]
@@ -113,7 +116,8 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 
     while integrator.t - t_start < step.period
         v = integrator.sol[sys.V][end]
-        set_u!(integrator, sys.P, -step.value*v)
+        set_u!(integrator, sys.Pin, 0)
+        set_u!(integrator, sys.Iin, -step.value)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 1, true)
     end
@@ -122,7 +126,8 @@ end
 function step!(integrator::SciMLBase.DEIntegrator,sys::ModelingToolkit.AbstractSystem, step::DriveStep)
     # print("Stepping $(length(step.csv[1])) steps\n")
     for (dt, value) in zip(step.csv[1], step.csv[2])
-        set_u!(integrator, sys.P, -value)
+        set_u!(integrator, sys.Pin, -value)
+        set_u!(integrator, sys.Iin, 0)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, dt, true)
     end

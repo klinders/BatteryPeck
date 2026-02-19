@@ -22,6 +22,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         c_surf(t)
         U₀(t)
         z(t)
+        ϕ̄ₛ(t)
     end
 
     # Discretized equations
@@ -43,7 +44,6 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
         # Boundary condition edge
         Dt(c[end]) ~ (-Aᵣ[end]*J.u/F/p.aₖ - Dₗ[end]*Aₗ[end]*(c[end] - c[end-1])/Δr)/Vᵢ[end]
-
 
     ]
 

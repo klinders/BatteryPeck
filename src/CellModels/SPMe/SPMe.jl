@@ -43,10 +43,16 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ηᵣ(t)
         (ηₙ(t))[1:g.el.Nx[1]]
         (ηₚ(t))[1:g.el.Nx[3]]
-        Δϕₛ(t)
+        Δϕₛ(t), [guess=0]
         # Δϕf(t)
         (ϕₙ(t))[1:g.el.Nx[1]]
         (ϕₚ(t))[1:g.el.Nx[3]]
+        (jₙ0(t))[1:g.el.Nx[1]]
+        (jₚ0(t))[1:g.el.Nx[3]]
+        j̄ₙ0(t)
+        j̄ₚ0(t)
+        ϕ̄ₙ(t)
+        ϕ̄ₚ(t)
 
         Rᵢ(t)
     end
@@ -67,7 +73,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
     # X-average
     x = g.el.x_centers
-
+    L = sum(g.el.Ls)
     # Exchange current densities
     
 
@@ -86,30 +92,19 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # jₚ0 = [params.p.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.p.c₊-cₛ[i])) for i in g.el.ixₚ]
     Nn = length(g.el.ixₙ)
     Np = length(g.el.ixₚ)
-    jₙ0 = sum([params.n.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.n.c₊-cₛ[i])) for i in g.el.ixₙ])/Nn
-    jₚ0 = sum([params.p.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.p.c₊-cₛ[i])) for i in g.el.ixₚ])/Np
 
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
-    ηᵣ_n = 2*R*T.u/F*asinh(ne.J.u/params.n.aₖ/2/jₙ0)
-    ηᵣ_p = 2*R*T.u/F*asinh(pe.J.u/params.p.aₖ/2/jₚ0)
+    ηᵣn = 2*R*T.u/F*asinh(ne.J.u/params.n.aₖ/2/j̄ₙ0)
+    ηᵣp = 2*R*T.u/F*asinh(pe.J.u/params.p.aₖ/2/j̄ₚ0)
 
     # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
     # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
 
     # X-average of the electrolyte potential
-    ϕₑ_n = [el.ϕₑ[i] for i in g.el.ixₙ]
-    ϕₑ_p = [el.ϕₑ[i] for i in g.el.ixₚ]
-
-    ϕₑ_n_x = sum(ϕₑ_n)/Nn
-    ϕₑ_p_x = sum(ϕₑ_p)/Np
-
-    ϕₛ_n = [i_app*(2*params.e.Lₙ - x[i])*x[i]/2/params.n.σₖ/params.e.Lₙ + i_app*params.e.Lₙ/3/params.n.σₖ for i in g.el.ixₙ]
-    ϕₛ_p = [i_app*(2*sum(g.el.Ls[1:2]) - x[i])*x[i]/2/params.p.σₖ/params.e.Lₚ - i_app/params.e.Lₚ/6/params.p.σₖ*(3*sum(g.el.Ls)^2 - params.e.Lₚ^2) for i in g.el.ixₚ]
-
-    Δϕₙ = [ϕₛ_n[i] - el.ϕₑ[g.el.ixₙ[i]] - ne.U₀ for i in 1:Nn]
-
+    ϕₛ_n = [i_app*(x[i] - 2*params.e.Lₙ)*x[i]/2/params.n.σₖ/params.e.Lₙ for i in g.el.ixₙ]
+    ϕₛ_p = [i_app*(x[i] - L)*(L - 2*params.e.Lₚ - x[i])/2/params.p.σₖ/params.e.Lₚ for i in g.el.ixₚ]
 
     eqns = [
         # Temps
@@ -120,14 +115,22 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         ## Potentials ##
         U₀ ~ pe.U₀ - ne.U₀,
-        ηᵣ ~ ηᵣ_p - ηᵣ_n,
+        ηᵣ ~ ηᵣp - ηᵣn,
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
-        [ϕₙ[i] ~ ne.U₀ - ϕₛ_n[i] + ϕₑ_n_x + ηᵣ_n - sei.ϕf_x for i in 1:g.el.Nx[1]]...,
-        [ϕₚ[i] ~ pe.U₀ + ϕₛ_p[i] + ϕₑ_p_x + ηᵣ_p for i in 1:g.el.Nx[3]]...,
-        [ηₙ[i] ~ ϕₛ_n[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
-        [ηₚ[i] ~ ϕₛ_p[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
-        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
+        # Exchange current densities
+        [jₙ0[i] ~ params.n.mₖ*sqrt(el.cₑ[g.el.ixₙ[i]]*ne.c_surf*(params.n.c₊-ne.c_surf)) for i in 1:Nn]...,
+        [jₚ0[i] ~ params.p.mₖ*sqrt(el.cₑ[g.el.ixₚ[i]]*pe.c_surf*(params.p.c₊-pe.c_surf)) for i in 1:Np]...,
+        j̄ₙ0 ~ sum(jₙ0)/Nn,
+        j̄ₚ0 ~ sum(jₚ0)/Np,
+
+        [ϕₙ[i] ~ n.v + ϕₛ_n[i] for i in 1:Nn]...,
+        [ϕₚ[i] ~ p.v + ϕₛ_p[i] for i in 1:Np]...,
+        [ηₙ[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
+        ϕ̄ₙ ~ sum(ϕₙ)/Nn,
+        ϕ̄ₚ ~ sum(ϕₚ)/Np,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_av,
         Rᵢ ~ (U₀-v)/i, 
 
         v ~ p.v - n.v,
@@ -137,8 +140,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         # Electrolyte current density
         el.i_app.u ~ i_app,
         # el.jₙ0.u ~ jₙ0,
-        el.ϕₛn.u ~ sum(ϕₛ_n)/Nn,
-        el.Δϕₙ.u ~ sum(Δϕₙ)/Nn,
+        el.ϕₛn.u ~ ϕ̄ₙ,
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣn + sei.ϕf_av ,#(ϕ̄ₙ - el.ϕ̄ₑn - ne.U₀)*log(ne.c_surf/params.n.c₊), # i_app/sqrt(j̄ₙ0^2*params.e.Lₙ^2*params.n.aₖ^2 + i_app^2)*R*T.u/F
 
         pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
