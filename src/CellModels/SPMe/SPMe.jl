@@ -130,7 +130,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
         ϕ̄ₚ ~ sum(ϕₚ)/Np,
-        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_av,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
 
         v ~ p.v - n.v,
@@ -141,7 +141,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.i_app.u ~ i_app,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
-        el.Δϕₙ.u ~ ne.U₀ + ηᵣn + sei.ϕf_av ,#(ϕ̄ₙ - el.ϕ̄ₑn - ne.U₀)*log(ne.c_surf/params.n.c₊), # i_app/sqrt(j̄ₙ0^2*params.e.Lₙ^2*params.n.aₖ^2 + i_app^2)*R*T.u/F
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣn + sei.ϕf_x ,#(ϕ̄ₙ - el.ϕ̄ₑn - ne.U₀)*log(ne.c_surf/params.n.c₊), # i_app/sqrt(j̄ₙ0^2*params.e.Lₙ^2*params.n.aₖ^2 + i_app^2)*R*T.u/F
 
         pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
