@@ -1,7 +1,7 @@
 using Pkg
 Pkg.activate(".")
 
-using BatteryPeck
+using BatteryToolkit
 
 using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks, ModelingToolkitStandardLibrary.Electrical

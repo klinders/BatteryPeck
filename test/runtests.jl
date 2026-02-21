@@ -1,7 +1,7 @@
 using Pkg
 pkg.activate(".")
 
-using BatteryPeck
+using BatteryToolkit
 
 # Run test suite
 println("Starting tests")

@@ -2,8 +2,6 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
-using BatteryPeck
-
 function MultiCellPack(;name, params=Chen2020(), config=(12,1), Qcell=5)
 
     @parameters begin

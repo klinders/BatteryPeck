@@ -2,8 +2,6 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
-using BatteryPeck
-
 function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
 
     @parameters begin
