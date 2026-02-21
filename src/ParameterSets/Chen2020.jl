@@ -5,10 +5,13 @@ sei_parameters = SideReactionParameters(
     k = 1.0e-10, # Reaction rate
     α = 0.5, # Side reaction transfer coefficient
     M = 0.162, # Molar mass of SR product
-    n = 1, # Number of electrons transferred in SR
+    z = 2, # Ratio of Li to SEI moles
     ρ = 1690, # Density of SR product
+    σ = 5e-6, # Conductivity in the SEI layer
     U = 0.4, # Open circuit potential of SR
-    Lf₀ = 1e-9, # Initial thickness of SR film
+    Lf₀ = 5e-9, # Initial thickness of SR film
+    V̄ = 9.585e-05, # Partial molar volume
+    R = 200000.0, # SEI resistivity
     j_sei₀ = 1.5e-07, # SEI Reaction exchangcurrent [A.m-2]
     c = (el) -> nothing # Concentration dependence function
 )
@@ -23,7 +26,7 @@ n = SolidParticleParameters(
     # Open-circuit potential in V
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
     mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
-    L_sei₀ = 1e-9,
+    L_sei₀ = 5e-9,
     side_reactions = [sei_parameters]
 )
 

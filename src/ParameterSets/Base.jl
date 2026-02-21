@@ -21,10 +21,13 @@ Base.@kwdef mutable struct SideReactionParameters
     k               # Reaction rate
     α               # Side reaction transfer coefficient
     M               # Molar mass of SR product
-    n               # Number of electrons transferred in SR
+    z               # Ratio of Li to SEI moles
     ρ               # Density of SR product
+    σ               # Conductivity in the SEI layer
     U               # Open circuit potential of SR
     Lf₀             # Initial thickness of SR film
+    V̄               # SEI Partial molar volume
+    R               # SEI Resistivity
     j_sei₀          # Reaction exchange current
     c::Function     # Concentration dependence function
 end

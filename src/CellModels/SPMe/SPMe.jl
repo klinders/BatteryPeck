@@ -17,6 +17,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @parameters begin
         t # Time variable
     end
+    Dt = Differential(t)
 
     g = build_fvm_geometry(params, N)
     
@@ -63,26 +64,11 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     
     # Scale the current density to the electrode area
     i_app = i/Q*params.i₀
-    
-    # Porosity per region
-    ϵ = [
-        [el.ϵₙ for _ in g.el.ixₙ];
-        [el.ϵₛ for _ in g.el.ixₛ];
-        [el.ϵₚ for _ in g.el.ixₚ];
-    ]
 
     # X-average
     x = g.el.x_centers
     L = sum(g.el.Ls)
     # Exchange current densities
-    
-
-    # Repeat the electrode surface potential for consistency
-    cₛ = [
-        [ne.c_surf for _ in g.el.ixₙ]...,
-        [0 for _ in g.el.ixₛ]...,
-        [pe.c_surf for _ in g.el.ixₚ]...
-    ]
 
     ## Reaction overpotentials ##
 
@@ -104,7 +90,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
     # X-average of the electrolyte potential
     ϕₛ_n = [i_app*(x[i] - 2*params.e.Lₙ)*x[i]/2/params.n.σₖ/params.e.Lₙ for i in g.el.ixₙ]
-    ϕₛ_p = [i_app*(x[i] - L)*(L - 2*params.e.Lₚ - x[i])/2/params.p.σₖ/params.e.Lₚ for i in g.el.ixₚ]
+    ϕₛ_p = [i_app*(x[i] + (x[i] - L)^2/(2*params.e.Lₚ))/params.p.σₖ for i in g.el.ixₚ]
 
     eqns = [
         # Temps
@@ -125,7 +111,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         j̄ₚ0 ~ sum(jₚ0)/Np,
 
         [ϕₙ[i] ~ n.v + ϕₛ_n[i] for i in 1:Nn]...,
-        [ϕₚ[i] ~ p.v + ϕₛ_p[i] for i in 1:Np]...,
+        [ϕₚ[i] ~ p.v - ϕₛ_p[i] for i in 1:Np]...,
         [ηₙ[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
         [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
@@ -141,7 +127,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.i_app.u ~ i_app,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
-        el.Δϕₙ.u ~ ne.U₀ + ηᵣn + sei.ϕf_x ,#(ϕ̄ₙ - el.ϕ̄ₑn - ne.U₀)*log(ne.c_surf/params.n.c₊), # i_app/sqrt(j̄ₙ0^2*params.e.Lₙ^2*params.n.aₖ^2 + i_app^2)*R*T.u/F
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣn - sei.ϕf_x,
 
         pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
@@ -149,8 +135,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         # # Ne sei reaction
         sei.J.u ~ ne.J.u, # Current density for SEI side reaction
         sei.T.u ~ T.u,
-        [sei.ϕₑ.u[i] ~ el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
-        [sei.ϕₛ.u[i] ~ ϕₙ[i] for i in 1:Nn]...,
+        [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        
+        # Porosity (assumed constant)
+        # [el.ϵ[i] ~ params.e.ϵₙ - params.n.aₖ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
+        # [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
+        # [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
 
     ]
 

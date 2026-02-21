@@ -29,9 +29,14 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ]
 
         # Porosity
-        ϵₙ(t) = p.ϵₙ # Negative electrode
-        ϵₛ(t) = p.ϵₛ # Separator
-        ϵₚ(t) = p.ϵₚ # Positive electrode
+        (ϵ(t))[1:g.Nₜ] = [
+            [p.ϵₙ for _ in g.ixₙ]...,       # Negative electrode
+            [p.ϵₛ for _ in g.ixₛ]...,       # Separator
+            [p.ϵₚ for _ in g.ixₚ]...,       # Positive electrode
+        ]
+        ϵ̄ₙ(t) 
+        ϵ̄ₛ(t) 
+        ϵ̄ₚ(t)
 
         # Actual concentration
         (cₑ(t))[1:g.Nₜ]
@@ -73,13 +78,6 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         end
     end
 
-    # Porosity per region
-    ϵ = [
-        [ϵₙ for _ in g.ixₙ] 
-        [ϵₛ for _ in g.ixₛ]
-        [ϵₚ for _ in g.ixₚ] 
-    ]
-
     # Bruggeman coefficients per region
     b = [
         [p.bₙ for _ in g.ixₙ] 
@@ -95,6 +93,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         (f1[1] + iₑ(0)/B[1])*(x[1])/2,
         [(f1[i] + f1[i-1])*(x[i]-x[i-1])/2 for i in 2:g.Nₜ]...,
     ])
+    ϕₑ_rn = sum(ϕₑ_r[g.ixₙ])/g.Nx[1]
+    ϕₑ_rp = sum(ϕₑ_r[g.ixₚ])/g.Nx[3]
 
     # Electrolyte reaction potential
     df_fac = ones(length(cₑ))
@@ -104,17 +104,16 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
 
     # Other approach
-    κₙ = p.σₑ(c̄ₑ)*(ϵₙ^p.bₙ)
-    κₛ = p.σₑ(c̄ₑ)*(ϵₛ^p.bₛ)
-    κₚ = p.σₑ(c̄ₑ)*(ϵₚ^p.bₚ)
+    κₙ = p.σₑ(c̄ₑ)*(ϵ̄ₙ^p.bₙ)
+    κₛ = p.σₑ(c̄ₑ)*(ϵ̄ₛ^p.bₛ)
+    κₚ = p.σₑ(c̄ₑ)*(ϵ̄ₚ^p.bₚ)
 
     # phi_e max 1e15
-    M = [log(max(cₑ[i]/p.c₀,1e-15)) for i in 1:g.Nₜ]
-    M_n = sum(M[g.ixₙ])/g.Nx[1]
-    M_p = sum(M[g.ixₚ])/g.Nx[3]
-    ie_n = sum([ϕₑ_r[i] for i in g.ixₙ])/g.Nx[1]
+    χ = [2*(1 - p.t₊(cₑ[i]))*df_fac[i]*log(max(cₑ[i]/p.c₀,1e-15)) for i in 1:g.Nₜ]
+    χₙ = sum(χ[g.ixₙ])/g.Nx[1]
+    χₚ = sum(χ[g.ixₚ])/g.Nx[3]
 
-    ϕₑ_const = -Δϕₙ.u + ϕₛn.u - (1 - p.t₊(c̄ₑn))*df_fac[1]*M_n*2*R*T.u/F - i_app.u*p.Lₙ*(1/(3*κₙ) - 1/κₛ)
+    ϕₑ_const = -Δϕₙ.u + ϕₛn.u - χₙ*R*T.u/F - i_app.u*p.Lₙ*(1/(3*κₙ) - 1/κₛ)
 
     ϕi = [
         [i_app.u/κₙ*(x[i]^2 - p.Lₙ^2)/(2*p.Lₙ) + i_app.u*p.Lₙ/κₛ for i in g.ixₙ]
@@ -122,7 +121,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [i_app.u/κₚ*(x[i]*(2*L - x[i]) + p.Lₚ^2 - L^2)/(2*p.Lₚ) + i_app.u*(L - p.Lₚ)/κₛ for i in g.ixₚ]
     ]
 
-    ϕₑ_f = [ϕₑ_const + (1 - p.t₊(c̄ₑ))*df_fac[i]*2*R*T.u/F*M[i] - ϕi[i] for i in 1:g.Nₜ]
+    ϕₑ_f = [ϕₑ_const + χ[i]*R*T.u/F - ϕi[i] for i in 1:g.Nₜ]
 
     eqns = [
         # REPLACED Ce[i+1] with Ce[i] to avoid index out of bounds error...
@@ -138,12 +137,6 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         
         # Boundary condition at the end
         Dt(ϵcₑ[end]) ~ (-Dₗ[end]*(cₑ[end] - cₑ[end-1])/Δxₗ[end] + (1-p.t₊(cₑ[end]))*j(x[end])*Δx[end]/F)/Δx[end], 
-
-
-        # Porosity (assumed constant)
-        Dt(ϵₙ) ~ 0,
-        Dt(ϵₛ) ~ 0,
-        Dt(ϵₚ) ~ 0,
         
         # Actual concentration
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
@@ -156,13 +149,20 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
         ϕ̄ₑ ~ sum(ϕₑ)/g.Nₜ,
-        ϕ̄ₑn ~ sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
+        ϕ̄ₑn ~ ϕₑ_rn + χₙ*R*T.u/F,# sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
         ϕ̄ₑs ~ sum([ϕₑ[i] for i in g.ixₛ])/g.Nx[2],
         ϕ̄ₑp ~ sum([ϕₑ[i] for i in g.ixₚ])/g.Nx[3],
 
+        # Porosity
+        ϵ̄ₙ ~ sum([ϵ[i] for i in g.ixₙ])/g.Nx[1],
+        ϵ̄ₛ ~ sum([ϵ[i] for i in g.ixₛ])/g.Nx[2],
+        ϵ̄ₚ ~ sum([ϵ[i] for i in g.ixₚ])/g.Nx[3],
+
+        # Constant
+        [Dt(ϵ[i]) ~ 0 for i in 1:g.Nₜ]...,
         # Marquis 2019
-        Δϕₑ ~ -i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/κₛ + p.Lₚ/(3*κₚ)),
-        ηₑ ~ (1 - p.t₊(c̄ₑ))*(M_p - M_n)*2*R*T.u/F
+        Δϕₑ ~ ϕₑ_rn - ϕₑ_rp,#-i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/(κₛ) + p.Lₚ/(3*κₚ)),
+        ηₑ ~ (χₚ - χₙ)*R*T.u/F
     ]
 
     System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])
