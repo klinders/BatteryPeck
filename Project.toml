@@ -1,4 +1,4 @@
-name = "BatteryPeck"
+name = "BatteryToolkit"
 uuid = "e9eeebe6-cbd9-464a-ae64-628cb336b211"
 version = "0.1.0"
 authors = ["Koen Linders <k.s.j.linders@tudelft.nl>"]

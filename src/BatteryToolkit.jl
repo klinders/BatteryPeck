@@ -1,4 +1,4 @@
-module BatteryPeck
+module BatteryToolkit
 
 using ModelingToolkit
 using ModelingToolkitStandardLibrary
