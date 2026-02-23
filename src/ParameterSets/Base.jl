@@ -51,7 +51,9 @@ Base.@kwdef mutable struct BatteryParameters
     n::SolidParticleParameters # Parameters for the negative electrode
     e::ElectrolyteParameters # Parameters for the electrolyte
     
-    i₀ # Typical current density for 1C in A/m^-2
+    Hcc # Current collector height
+    Wcc # Current collector width
+    n_el # Number of parallel electrodes
     Q₀ # Original battery capacity in Ah
 
     Vmin

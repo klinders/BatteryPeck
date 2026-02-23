@@ -9,9 +9,11 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Δxₗ = g.Δxₗ
     Δxᵣ = g.Δxᵣ
     x = g.x_centers
+    xₗ = x - Δx/2
+    xᵣ = x + Δx/2
     
     R = 8.314 # Universal gas constant
-    F = 96485 # Faraday's constant
+    F = 96485.3321 # Faraday's constant
     
     Dt = Differential(t)
 
@@ -103,17 +105,26 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
 
+    Nₗ = [0, [-Dₗ[i]*(cₑ[i] - cₑ[i-1])/Δxₗ[i] + p.t₊(cₑ[i])*iₑ(xₗ[i])/F for i in 2:g.Nₜ]...]
+    Nᵣ = [[-Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] + p.t₊(cₑ[i])*iₑ(xᵣ[i])/F for i in 1:g.Nₜ-1]..., 0]
+
     # Other approach
     κₙ = p.σₑ(c̄ₑ)*(ϵ̄ₙ^p.bₙ)
     κₛ = p.σₑ(c̄ₑ)*(ϵ̄ₛ^p.bₛ)
     κₚ = p.σₑ(c̄ₑ)*(ϵ̄ₚ^p.bₚ)
 
     # phi_e max 1e15
-    χ = [2*(1 - p.t₊(cₑ[i]))*df_fac[i]*log(max(cₑ[i]/p.c₀,1e-15)) for i in 1:g.Nₜ]
-    χₙ = sum(χ[g.ixₙ])/g.Nx[1]
-    χₚ = sum(χ[g.ixₚ])/g.Nx[3]
+    function M(x)
+        tol = 1e-15
+        x = max(x, tol)
+        return log(x)
+    end
 
-    ϕₑ_const = -Δϕₙ.u + ϕₛn.u - χₙ*R*T.u/F - i_app.u*p.Lₙ*(1/(3*κₙ) - 1/κₛ)
+    χ = 2*(1 - p.t₊(c̄ₑ))*df_fac[1]
+
+    Mₙ = sum([M(cₑ[i]/c̄ₑ) for i in g.ixₙ])/g.Nx[1]
+    Mₚ = sum([M(cₑ[i]/c̄ₑ) for i in g.ixₚ])/g.Nx[3]
+    ϕₑ_const = -Δϕₙ.u + ϕₛn.u - χ*R*T.u/F*Mₙ - i_app.u*p.Lₙ*(1/(3*κₙ) - 1/κₛ)
 
     ϕi = [
         [i_app.u/κₙ*(x[i]^2 - p.Lₙ^2)/(2*p.Lₙ) + i_app.u*p.Lₙ/κₛ for i in g.ixₙ]
@@ -121,37 +132,40 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         [i_app.u/κₚ*(x[i]*(2*L - x[i]) + p.Lₚ^2 - L^2)/(2*p.Lₚ) + i_app.u*(L - p.Lₚ)/κₛ for i in g.ixₚ]
     ]
 
-    ϕₑ_f = [ϕₑ_const + χ[i]*R*T.u/F - ϕi[i] for i in 1:g.Nₜ]
+    ϕₑ_f = [ϕₑ_const + χ*R*T.u/F*M(cₑ[i]/c̄ₑ) - ϕi[i] for i in 1:g.Nₜ]
 
     eqns = [
         # REPLACED Ce[i+1] with Ce[i] to avoid index out of bounds error...
         
         # Boundary condition at the start
-        Dt(ϵcₑ[1]) ~ (Dᵣ[1]*(cₑ[2] - cₑ[1])/Δxᵣ[1] + (1-p.t₊(cₑ[1]))*j(x[1])*Δx[1]/F)/Δx[1], 
+        # Dt(ϵcₑ[1]) ~ (Dᵣ[1]*(cₑ[2] - cₑ[1])/Δxᵣ[1] + (1-p.t₊(cₑ[1]))*j(x[1])*Δx[1]/F)/Δx[1], 
         
         # Full region
-        [Dt(ϵcₑ[i]) ~ 
-        (Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] - Dₗ[i]*(cₑ[i] - cₑ[i-1])/Δxₗ[i] + 
-        (1-p.t₊(cₑ[i]))*j(x[i])*Δx[i]/F)/Δx[i]
-        for i in 2:g.Nₜ-1]...,
+        # [Dt(ϵcₑ[i]) ~ 
+        # (Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] - Dₗ[i]*(cₑ[i] - cₑ[i-1])/Δxₗ[i] + 
+        # (1-p.t₊(cₑ[i]))*j(x[i])*Δx[i]/F)/Δx[i]
+        # for i in 2:g.Nₜ-1]...,
+        [Dt(ϵcₑ[i]) ~ -(Nᵣ[i] - Nₗ[i])/Δx[i] + j(x[i])/F for i in 1:g.Nₜ]...,
         
+
         # Boundary condition at the end
-        Dt(ϵcₑ[end]) ~ (-Dₗ[end]*(cₑ[end] - cₑ[end-1])/Δxₗ[end] + (1-p.t₊(cₑ[end]))*j(x[end])*Δx[end]/F)/Δx[end], 
+        # Dt(ϵcₑ[end]) ~ (-Dₗ[end]*(cₑ[end] - cₑ[end-1])/Δxₗ[end] + (1-p.t₊(cₑ[end]))*j(x[end])*Δx[end]/F)/Δx[end], 
         
         # Actual concentration
         [cₑ[i] ~ ϵcₑ[i]/ϵ[i] for i in 1:g.Nₜ]...,
-        c̄ₑ ~ sum(cₑ)/g.Nₜ,
         c̄ₑn ~ sum([cₑ[i] for i in g.ixₙ])/g.Nx[1],
         c̄ₑs ~ sum([cₑ[i] for i in g.ixₛ])/g.Nx[2],
         c̄ₑp ~ sum([cₑ[i] for i in g.ixₚ])/g.Nx[3],
+        # Weighted average of the electrodes
+        c̄ₑ ~ (c̄ₑn*p.Lₙ + c̄ₑs*p.Lₛ + c̄ₑp*p.Lₚ)/L,
 
         # Electrolyte potential
         [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
-        ϕ̄ₑ ~ sum(ϕₑ)/g.Nₜ,
-        ϕ̄ₑn ~ ϕₑ_rn + χₙ*R*T.u/F,# sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
+        ϕ̄ₑn ~ ϕₑ_rn + χ*R*T.u/F*Mₙ,# sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
         ϕ̄ₑs ~ sum([ϕₑ[i] for i in g.ixₛ])/g.Nx[2],
         ϕ̄ₑp ~ sum([ϕₑ[i] for i in g.ixₚ])/g.Nx[3],
+        ϕ̄ₑ ~ (ϕ̄ₑn*p.Lₙ + ϕ̄ₑs*p.Lₛ + ϕ̄ₑp*p.Lₚ)/L,
 
         # Porosity
         ϵ̄ₙ ~ sum([ϵ[i] for i in g.ixₙ])/g.Nx[1],
@@ -161,8 +175,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         # Constant
         [Dt(ϵ[i]) ~ 0 for i in 1:g.Nₜ]...,
         # Marquis 2019
-        Δϕₑ ~ ϕₑ_rn - ϕₑ_rp,#-i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/(κₛ) + p.Lₚ/(3*κₚ)),
-        ηₑ ~ (χₚ - χₙ)*R*T.u/F
+        Δϕₑ ~ -i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/(κₛ) + p.Lₚ/(3*κₚ)),
+        ηₑ ~ (Mₚ - Mₙ)χ*R*T.u/F
     ]
 
     System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])
