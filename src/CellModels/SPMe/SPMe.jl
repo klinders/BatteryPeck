@@ -10,7 +10,8 @@ include("SEIGrowth.jl")
 
 function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
-    @warn "Simulation step terminated"
+    t = round(int.t,digits=2)
+    @warn "Simulation step terminated at t=$t"
     return (;)
 end
 
@@ -64,7 +65,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     end
     
     # Scale the current density to the electrode area
-    A = params.Hcc*params.Wcc*params.n_el
+    A = params.Hcc*params.Wcc*params.n_el*(Q/params.Q₀)
     i_app = i/A
 
     # X-average

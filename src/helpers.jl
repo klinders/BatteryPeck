@@ -3,7 +3,8 @@
 # http://dx.doi.org/10.1149/2.0291607jes
 function D_face(Dleft, Dright, Δxleft, Δxright)
     # Harmonic mean of left and right diffusivities
-    return (Δxleft + Δxright)/(Δxleft/Dleft + Δxright/Dright)
+    beta = Δxleft/(Δxleft + Δxright)
+    return (Dleft*Dright)/(beta*Dright + (1-beta)*Dleft)
 end
 
 # Geometry builder for 3-region 1D FVM (cell-centered)

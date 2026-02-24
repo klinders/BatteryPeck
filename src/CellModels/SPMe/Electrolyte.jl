@@ -13,7 +13,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     xᵣ = x + Δx/2
     
     R = 8.314 # Universal gas constant
-    F = 96485.3321 # Faraday's constant
+    F = 96485 # Faraday's constant
     
     Dt = Differential(t)
 

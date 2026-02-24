@@ -83,6 +83,10 @@ function Base.:*(a::AbstractVector{<:Step}, n::Integer)
     return repeat(a,n)
 end
 
+function Base.:+(a::AbstractVector{<:Step}, b::AbstractVector{<:Step})
+    return [a;b]
+end
+
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
     set_u!(integrator, sys.Pin, -step.value)
     set_u!(integrator, sys.Iin, 0)
