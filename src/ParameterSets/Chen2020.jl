@@ -7,12 +7,12 @@ sei_parameters = SideReactionParameters(
     M = 0.162, # Molar mass of SR product
     z = 2, # Ratio of Li to SEI moles
     ρ = 1690, # Density of SR product
-    σ = 5e-6, # Conductivity in the SEI layer
+    σ = 5e-6, #8.95e-14 Conductivity in the SEI layer
     U = 0.4, # Open circuit potential of SR
     Lf₀ = 5e-9, # Initial thickness of SR film
     V̄ = 9.585e-05, # Partial molar volume
-    R = 200000.0, # SEI resistivity
-    j_sei₀ = 1.5e-07, # SEI Reaction exchangcurrent [A.m-2]
+    R = 2e5, # SEI resistivity
+    j_sei₀ = 1.5e-7, # SEI Reaction exchangcurrent [A.m-2]
     c = (el) -> nothing # Concentration dependence function
 )
 

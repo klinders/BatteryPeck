@@ -4,10 +4,16 @@ using ModelingToolkit
 
 abstract type Step end
 
+"""
+Rest for a period
+"""
 struct RestStep <: Step
     period::Real
 end
 
+"""
+Charge up to specified SoC using the given power for the given period.
+"""
 struct ChargeStep <: Step
     soc::Real
     period::Real
@@ -15,16 +21,33 @@ struct ChargeStep <: Step
     ChargeStep(soc::Real, period::Real=0, power::Real=11000) = new(soc,period,power)
 end
 
+"""
+Apply a given  `power` for a given `period`
+"""
 struct PowerStep <: Step
     value::Real
     period::Real
 end
 
+"""
+Apply a given  `current` for a given `period`
+"""
 struct CurrentStep <: Step
     value::Real
     period::Real
 end
 
+"""
+Apply a drivecycle from the given csv
+
+**Arguments**
+- `csv ::Vector{Any}` Path to the csv driving cycle
+- `period ::Real` (optional) time to apply the cycle in seconds
+
+At the moment, the period can be up to the lenght of the csv. 
+
+TODO: Repeat the cycle when period is longer then csv
+"""
 struct DriveStep <: Step
     csv::Vector{Any}
     period::Real
@@ -42,25 +65,31 @@ struct DriveStep <: Step
     end
 end
 
+"Get the initial value from a power step"
 function get_p0(s::PowerStep)
     return -s.value
 end
 
+"Get the initial value from a current step"
 function get_p0(s::CurrentStep)
     return -s.value*4.2
 end
 
+"Get the initial value from a drive step"
 function get_p0(s::DriveStep)
     return -s.csv[2][1]
 end
 
+"Get the initial value from a charge step"
 function get_p0(s::ChargeStep)
     return s.power
 end
 
+"Get the initial value from a rest step"
 function get_p0(s::RestStep)
     return 0
 end
+
 
 struct Experiment
     steps::Array{Step}

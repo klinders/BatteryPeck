@@ -1,13 +1,10 @@
 
 # Home
 
-```@contents
+```@autodocs
+Modules = [BatteryToolkit]
+Order   = [:function, :type]
 ```
-
-```@index
-```
-
-Citing [ChenEtAl2020,MarquisEtAl2019](@cite)
 
 ```@bibliography
 ```

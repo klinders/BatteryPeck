@@ -31,11 +31,12 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ]
 
         # Porosity
-        (ϵ(t))[1:g.Nₜ] = [
-            [p.ϵₙ for _ in g.ixₙ]...,       # Negative electrode
-            [p.ϵₛ for _ in g.ixₛ]...,       # Separator
-            [p.ϵₚ for _ in g.ixₚ]...,       # Positive electrode
-        ]
+        (ϵ(t))[1:g.Nₜ] 
+        # = [
+        #     [p.ϵₙ for _ in g.ixₙ]...,       # Negative electrode
+        #     [p.ϵₛ for _ in g.ixₛ]...,       # Separator
+        #     [p.ϵₚ for _ in g.ixₚ]...,       # Positive electrode
+        # ]
         ϵ̄ₙ(t) 
         ϵ̄ₛ(t) 
         ϵ̄ₚ(t)
@@ -108,7 +109,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Nₗ = [0, [-Dₗ[i]*(cₑ[i] - cₑ[i-1])/Δxₗ[i] + p.t₊(cₑ[i])*iₑ(xₗ[i])/F for i in 2:g.Nₜ]...]
     Nᵣ = [[-Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] + p.t₊(cₑ[i])*iₑ(xᵣ[i])/F for i in 1:g.Nₜ-1]..., 0]
 
-    # Other approach
+    # Effective electrolyte conductivity
     κₙ = p.σₑ(c̄ₑ)*(ϵ̄ₙ^p.bₙ)
     κₛ = p.σₑ(c̄ₑ)*(ϵ̄ₛ^p.bₛ)
     κₚ = p.σₑ(c̄ₑ)*(ϵ̄ₚ^p.bₚ)
@@ -173,7 +174,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ϵ̄ₚ ~ sum([ϵ[i] for i in g.ixₚ])/g.Nx[3],
 
         # Constant
-        [Dt(ϵ[i]) ~ 0 for i in 1:g.Nₜ]...,
+        # [Dt(ϵ[i]) ~ 0 for i in 1:g.Nₜ]...,
         # Marquis 2019
         Δϕₑ ~ -i_app.u*(p.Lₙ/(3*κₙ) + p.Lₛ/(κₛ) + p.Lₚ/(3*κₚ)),
         ηₑ ~ (Mₚ - Mₙ)χ*R*T.u/F

@@ -15,6 +15,17 @@ function abort!(mod,obs,ctx,int)
     return (;)
 end
 
+"""
+The SPMe model implemented based on [MarquisEtAl2019](@citet) and [BrosaPlanellaWidanage2023](@citet)
+
+**Arguments**
+- `name` (optional) defaults to SPMe
+- `params ::BatteryParameters` Parameters from the given parameter set
+- `Q ::Real` (optional) The capacity of the cell in Ah
+- `N ::Dict(:Nₓ=>[::Int, ::Int, ::Int], :Nᵣ=>[::Int, ::Int])` (optional) number of mesh nodes in the particles and electrolyte
+- `side_reactions ::Bool` (optional) enable side reactions
+
+"""
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
     @parameters begin
         t # Time variable
@@ -56,6 +67,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         j̄ₚ0(t)
         ϕ̄ₙ(t)
         ϕ̄ₚ(t)
+        aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
+        aₚ(t)
 
         Rᵢ(t)
     end
@@ -134,16 +147,20 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
         ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
-
+        
+        aₙ ~ 3*(1-el.ϵ̄ₙ)/params.n.Rₖ,
+        aₚ ~ params.p.aₖ,#3*(1-el.ϵ̄ₚ)/params.p.Rₖ,
         # # Ne sei reaction
         sei.J.u ~ ne.J.u, # Current density for SEI side reaction
         sei.T.u ~ T.u,
+        sei.aₖ.u ~ aₙ,
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
         
         # Porosity (assumed constant)
-        # [el.ϵ[i] ~ params.e.ϵₙ - params.n.aₖ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
-        # [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
-        # [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
+        [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
+        [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
+        [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
+
 
     ]
 
