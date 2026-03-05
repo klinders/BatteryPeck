@@ -165,8 +165,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [
             v ~ params.Vmin,
             v ~ params.Vmax,
-            pe.c_surf ~ params.p.c₊*0.99,
-            ne.c_surf ~ params.n.c₊*0.99,
+            pe.c_surf ~ params.p.c₊*0.999,   # Upper bound
+            ne.c_surf ~ params.n.c₊*0.999,
+            pe.c_surf ~ params.p.c₊*0.001,   # Lower bound
+            ne.c_surf ~ params.n.c₊*0.001
         ]=>(abort!,(;))
     ]
 

@@ -33,7 +33,7 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
         step!(integrator, sys, step)
         println("  [Step $i] Finished at t = $(integrator.t)s | Current Voltage: $(integrator[sys.cell.v])V")
 
-        # Check if battery hit a safety limit
+        # Check if battery hit safety limit
         if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated
             println("  [!] Vmin/Vmax limit reached. Stopping experiment early.")
             break
