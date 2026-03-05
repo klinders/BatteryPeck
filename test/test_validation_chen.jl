@@ -63,8 +63,6 @@ exp_duration = t_exp[end]
 # Load parameter set
 p = Chen2020()
 
-soc_init = 0.063
-
 # Map SoC to stoichiometries
 z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
 z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
