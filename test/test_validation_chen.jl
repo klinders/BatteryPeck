@@ -10,6 +10,7 @@ using CSV
 using DataFrames
 using Plots
 using Plots.Measures
+using DataInterpolations
 
 using Revise
 using BatteryPeck
@@ -27,6 +28,19 @@ v_exp = df[!, "Voltage [V]"]
 T_surf_exp = df[!, "Temperature Cell [degC]"]
 T_chamber_exp = df[!, "Temperature Chamber [degC]"]
 T_amb_K = T_chamber_exp[1] + 273.15
+
+# Read V-SoC LUT
+lut_file = joinpath(@__DIR__, "..", "data", "Chen2020", "soc_ocv_lut.csv")
+lut = CSV.read(lut_file, DataFrame)
+
+# Create interpolator mapping voltage to SoC
+v_to_soc_interp = LinearInterpolation(lut.SoC, lut.Voltage)
+
+# Dynamically calculate soc_init based on voltage (either from CSV, or own input)
+initial_measured_voltage = v_exp[1]
+soc_init = v_to_soc_interp(initial_measured_voltage)
+
+println("Dynamically initialised at SoC = $(round(soc_init*100, digits=2))% based on starting voltage of $(initial_measured_voltage)V")
 
 # Process the experimental current for plotting
 raw_i_exp = df[!, "Current [A]"]
@@ -51,11 +65,11 @@ p = Chen2020()
 
 soc_init = 0.063
 
-# Map the SoC to the exact electrode stoichiometries
+# Map SoC to stoichiometries
 z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
 z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
 
-# Set the initial solid concentrations
+# Set initial solid concentrations
 p.n.c₀ = z_n_init * p.n.c₊  
 p.p.c₀ = z_p_init * p.p.c₊
 
