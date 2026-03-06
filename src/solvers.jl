@@ -5,25 +5,23 @@
 # Inputs:
 # - sys = model to be simulated, e.g. "SingleCellPack()"
 # - experiment = struct defining the simulation protocol
-# - args = variable positional arguments
-# - kwargs = keyword arguments for solver options of integrator, e.g. [saveat; abstol; reltol; dt]
-#
-# Creates static code from ODE expressions, handles multi-stage experiments, keeps track of simulation parameters
+# - alg = ODE algorithm (defaults to QNDF)
+# - kwargs = keyword arguments for solver options of integrator
 # =====================================================================================================================
 
 # Import packages
 using ModelingToolkit, OrdinaryDiffEq
 
-function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, args...; kwargs...)
+# Added alg=QNDF() as default, and explicit default tolerances
+function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-4, abstol=1e-7, kwargs...)
     
     # Convert symbolic ODE expressions into static code
-    # Inputs: ["equations"; "initial conditions"; "duration"]
-    # [system equations from model; initialise P0 with experiment's value; set duration with experiment's duration] 
-    prob = ODEProblem(sys, [sys.P=>experiment.p0], (0.0,experiment.tend))
+    # Added sparse=true to automatically leverage Sparse AutoDiff for speed
+    prob = ODEProblem(sys, [sys.P=>experiment.p0], (0.0,experiment.tend), sparse=true)
 
-    # Stop the simulation between every step, when inputs are modified between experiment stages, and keep track of simulation parameters
-    # Inputs: ["static code of system equations"; "time of step transitions"; "saving configuration"; "solver options"]
-    integrator = init(prob,args...; tstops=experiment.tstops, save_everystep=false, kwargs...)
+    # Stop simulation between every step, when inputs are modified between experiment stages
+    # Pass reltol and abstol variables into init function
+    integrator = init(prob, alg; tstops=experiment.tstops, save_everystep=false, reltol=reltol, abstol=abstol, kwargs...)
 
     print("Simulating for: $(experiment.tend) seconds\n")
     
@@ -40,12 +38,8 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
         end
     end
 
-    # without unit test: for step in experiment.steps (also remove print statements)
-
     # Force integrator to save last simulation point
-    SciMLBase.savevalues!(integrator)
-
-    # Return full history of simulation parameters
+    SciMLBase.savevalues!(integrator, true)
+    
     return integrator.sol
-
 end
