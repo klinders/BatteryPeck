@@ -1,5 +1,5 @@
 # =====================================================================================================================
-# test_validation_chen.jl
+# validation_chen.jl
 # Compares SingleCellCoreShellPack simulation to experimental Chen 2020 dataset
 # =====================================================================================================================
 
@@ -20,7 +20,7 @@ Revise.revise()
 # Load experimental data
 data_file = joinpath(@__DIR__, "..", "data", "Chen2020", "LGM50_cell03.csv")
 
-# Skip 13 rows of metadata from Maccor tester and load into DataFrame to extract plotting arrays
+# Skip metadata and load DataFrame to extract plotting arrays
 df = CSV.read(data_file, DataFrame, skipto=15, header=14)
 
 t_exp = df[!, "Test Time [s]"]
@@ -36,13 +36,13 @@ lut = CSV.read(lut_file, DataFrame)
 # Create interpolator mapping voltage to SoC
 v_to_soc_interp = LinearInterpolation(lut.SoC, lut.Voltage)
 
-# Dynamically calculate soc_init based on voltage (either from CSV, or own input)
+# Calculate soc_init dynamically based on initial voltage
 initial_measured_voltage = v_exp[1]
 soc_init = v_to_soc_interp(initial_measured_voltage)
 
 println("Dynamically initialised at SoC = $(round(soc_init*100, digits=2))% based on starting voltage of $(initial_measured_voltage)V")
 
-# Process the experimental current for plotting
+# Process experimental current for plotting
 raw_i_exp = df[!, "Current [A]"]
 md_exp = df[!, "Md"]
 i_exp = zeros(Float64, length(raw_i_exp))
@@ -75,15 +75,14 @@ p.Vmin = 2.4
 p.Vmax = 4.3
 
 # Build coupled core-shell system
-# Guess natural convection coefficient (e.g., h=15 W/m²K)
-@mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=18.0)
+@mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=21.0, T_ambient=T_amb_K)
 
-# Run experiment
+# Define experiment
 exp = Experiment([
     CurrentDriveStep(data_file, exp_duration)
 ])
 
-println("Running Validation Simulation...")
+println("Running validation simulation...")
 @time sol = simulate(sys, exp, saveat=10.0)
 
 # Extract simulation results
@@ -92,22 +91,23 @@ v_sim = sol[sys.cell.v]
 i_sim = sol[sys.I]
 T_shell_sim = sol[sys.thermal.shell_cap.T] .- 273.15
 
-# Plotting
+# Plot results
 m = 7mm
 xlim_range = (0, exp_duration)
 colors = ["#0072BD", "#D95319", "#EDB120"]
 
-# Voltage plot
+# Plot voltage
 p_volt = plot(t_exp, v_exp, label="Exp. voltage", ylabel="Voltage (V)", 
               lw=2, color=:black, linestyle=:dash, legend=:bottomright, margin=m, xlims=xlim_range)
 plot!(p_volt, t_sim, v_sim, label="Sim. voltage", lw=2, color=colors[1])
 
-# Temperature plot
+# Plot temperature
 p_temp = plot(t_exp, T_surf_exp, label="Exp. surface temp", ylabel="Temperature (°C)", 
               lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
+plot!(p_temp, t_exp, T_chamber_exp, label="Exp. chamber temp", lw=2, color=:gray, linestyle=:dot)
 plot!(p_temp, t_sim, T_shell_sim, label="Sim. surface temp", lw=2, color=colors[2])
 
-# Current plot
+# Plot current
 p_curr = plot(t_exp, i_exp, label="Exp. current", xlabel="Time (s)", ylabel="Current (A)", 
               lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
 plot!(p_curr, t_sim, i_sim, label="Sim. current", lw=2, color=colors[3])

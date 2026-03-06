@@ -2,7 +2,7 @@
 
 julia_version = "1.12.2"
 manifest_format = "2.0"
-project_hash = "4aae38612b2b20f86dac289fc9aecff1fe523a5d"
+project_hash = "af99d3d08f17e45f552eeac6dc839eba4eaf1e5d"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -144,7 +144,7 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 version = "1.11.0"
 
 [[deps.BatteryPeck]]
-deps = ["CSV", "DataFrames", "DifferentialEquations", "ModelingToolkit", "ModelingToolkitStandardLibrary", "NaNMath", "OrdinaryDiffEq", "Plots", "Revise", "SciMLBase", "Symbolics", "Tables"]
+deps = ["CSV", "DataFrames", "DataInterpolations", "DifferentialEquations", "ModelingToolkit", "ModelingToolkitStandardLibrary", "NaNMath", "OrdinaryDiffEq", "Plots", "Revise", "SciMLBase", "Symbolics", "Tables"]
 path = "."
 uuid = "e9eeebe6-cbd9-464a-ae64-628cb336b211"
 version = "0.1.0"
