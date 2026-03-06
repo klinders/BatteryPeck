@@ -1,5 +1,5 @@
 # ==============================================================================
-# h_optimisation.jl
+# h_optimisation_chen.jl
 # Performs 1D grid search to find optimal convective heat transfer coefficient (h)
 # ==============================================================================
 
