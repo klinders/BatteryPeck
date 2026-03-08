@@ -44,8 +44,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
     @named sei = SEIGrowth(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
+    @named plating = LithiumPlating(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
 
-    submodels = [p,n,T,pe,ne,el,sei]
+    submodels = [p,n,T,pe,ne,el,sei,plating]
 
     @variables begin
         # Terminal voltage and current
@@ -155,6 +156,14 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         sei.T.u ~ T.u,
         sei.aₖ.u ~ aₙ,
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+
+        # Li plating
+        plating.J.u ~ne.J.u,
+        plating.T.u ~ T.u,
+        plating.aₖ.u ~ aₙ,
+        [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        plating.η_sei.u ~ sei.ϕf,
+        [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
