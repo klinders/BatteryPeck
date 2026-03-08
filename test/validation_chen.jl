@@ -1,6 +1,6 @@
 # =====================================================================================================================
 # validation_chen.jl
-# Compares SingleCellCoreShellPack simulation to experimental Chen 2020 dataset
+# Compare SingleCellCoreShellPack simulation to experimental Chen dataset
 # =====================================================================================================================
 
 using ModelingToolkit
@@ -11,16 +11,19 @@ using DataFrames
 using Plots
 using Plots.Measures
 using DataInterpolations
+using Logging
+using Statistics
+using Printf
 
 using Revise
-using BatteryPeck
+using BatteryToolkit
 
 Revise.revise()
 
 # Load experimental data
 data_file = joinpath(@__DIR__, "..", "data", "Chen2020", "LGM50_cell03.csv")
 
-# Skip metadata and load DataFrame to extract plotting arrays
+# Skip metadata and load dataframe to extract plotting arrays
 df = CSV.read(data_file, DataFrame, skipto=15, header=14)
 
 t_exp = df[!, "Test Time [s]"]
@@ -29,14 +32,14 @@ T_surf_exp = df[!, "Temperature Cell [degC]"]
 T_chamber_exp = df[!, "Temperature Chamber [degC]"]
 T_amb_K = T_chamber_exp[1] + 273.15
 
-# Read V-SoC LUT
+# Read voltage state of charge look up table
 lut_file = joinpath(@__DIR__, "..", "data", "Chen2020", "soc_ocv_lut.csv")
 lut = CSV.read(lut_file, DataFrame)
 
-# Create interpolator mapping voltage to SoC
+# Create interpolator mapping voltage to state of charge
 v_to_soc_interp = LinearInterpolation(lut.SoC, lut.Voltage)
 
-# Calculate soc_init dynamically based on initial voltage
+# Calculate initial state of charge dynamically based on initial voltage
 initial_measured_voltage = v_exp[1]
 soc_init = v_to_soc_interp(initial_measured_voltage)
 
@@ -63,7 +66,7 @@ exp_duration = t_exp[end]
 # Load parameter set
 p = Chen2020()
 
-# Map SoC to stoichiometries
+# Map state of charge to stoichiometries
 z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
 z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
 
@@ -74,8 +77,8 @@ p.p.c₀ = z_p_init * p.p.c₊
 p.Vmin = 2.4
 p.Vmax = 4.3
 
-# Build coupled core-shell system
-@mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=21.0, T_ambient=T_amb_K)
+# Build coupled core shell system
+@mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=19.5, T_ambient=T_amb_K)
 
 # Define experiment
 exp = Experiment([
@@ -83,13 +86,43 @@ exp = Experiment([
 ])
 
 println("Running validation simulation...")
-@time sol = simulate(sys, exp, saveat=10.0)
+
+# Run simulation while silencing internal package termination warnings
+@time sol = with_logger(NullLogger()) do
+    simulate(sys, exp; saveat=10.0, verbose=false)
+end
 
 # Extract simulation results
 t_sim = sol.t
 v_sim = sol[sys.cell.v]
 i_sim = sol[sys.I]
 T_shell_sim = sol[sys.thermal.shell_cap.T] .- 273.15
+
+# Interpolate simulation results to match experimental timestamps
+v_sim_interp = LinearInterpolation(v_sim, t_sim)
+T_shell_sim_interp = LinearInterpolation(T_shell_sim, t_sim)
+
+t_exp_clamped = clamp.(t_exp, t_sim[1], t_sim[end])
+v_sim_mapped = v_sim_interp.(t_exp_clamped)
+T_sim_mapped = T_shell_sim_interp.(t_exp_clamped)
+
+# Calculate root mean square error
+rmse_v = sqrt(mean((v_sim_mapped .- v_exp).^2))
+rmse_T = sqrt(mean((T_sim_mapped .- T_surf_exp).^2))
+
+# Calculate R squared
+ss_res_v = sum((v_exp .- v_sim_mapped).^2)
+ss_tot_v = sum((v_exp .- mean(v_exp)).^2)
+r2_v = 1.0 - (ss_res_v / ss_tot_v)
+
+ss_res_T = sum((T_surf_exp .- T_sim_mapped).^2)
+ss_tot_T = sum((T_surf_exp .- mean(T_surf_exp)).^2)
+r2_T = 1.0 - (ss_res_T / ss_tot_T)
+
+# Print validation metrics
+println("\nValidation metrics:")
+@printf("Voltage     | RMSE: %7.2f mV | R²: %.4f\n", rmse_v * 1000, r2_v)
+@printf("Temperature | RMSE: %7.2f °C | R²: %.4f\n", rmse_T, r2_T)
 
 # Plot results
 m = 7mm
@@ -114,5 +147,5 @@ plot!(p_curr, t_sim, i_sim, label="Sim. current", lw=2, color=colors[3])
 
 # Combine layouts
 l = @layout [a; b; c]
-p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core-shell thermal SPMe validation (Chen 2020 dataset)")
+p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core shell thermal SPMe validation")
 display(p_combined)

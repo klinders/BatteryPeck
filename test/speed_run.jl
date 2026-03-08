@@ -9,26 +9,26 @@
 
 # Import package manager
 using Pkg
-# Import module
-using BatteryPeck
-# Import packages
-using ModelingToolkit, DifferentialEquations, ModelingToolkitStandardLibrary.Blocks, ModelingToolkitStandardLibrary.Electrical
-using ModelingToolkit: t_nounits as t
-
 # Activate Julia environment in current directory
 Pkg.activate(".")
+
+# Import module
+using BatteryToolkit
+
+# Import packages
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Blocks, ModelingToolkitStandardLibrary.Electrical
 
 # Select battery parameter set
 params = Chen2020()
 
 # Number of cells to be simulated
-Ns = [1, 10]    # Temporarily removed Ns = 100, because it took too long
+Ns = [1, 10, 100]
 
 # Create new component model
 @mtkmodel Pack begin
 
     # Initialise loop parameter for number of cells
-    # Struc params affect structure of model by adding/removing equations before compilation
     @structural_parameters begin
         Ncell = 1
     end

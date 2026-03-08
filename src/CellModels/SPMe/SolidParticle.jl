@@ -33,6 +33,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         c_surf(t)                            # Surface concentration
         U₀(t)                                # Open-circuit potential
         z(t)                                 # Stoichiometry
+        ϕ̄ₛ(t)                                 # 
     end
 
     # Retrieve FVM geometry
@@ -65,7 +66,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
             ) / Vᵢ[i] 
         for i in 2:g.Nᵣ-1]...
 
-        # Eqs. 1c/3c;
+       # Eqs. 1c/3c;
         # Outer most cell
         Dt(c[end]) ~ 
             (

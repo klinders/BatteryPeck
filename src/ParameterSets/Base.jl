@@ -21,10 +21,13 @@ Base.@kwdef mutable struct SideReactionParameters
     k               # Reaction rate
     α               # Side reaction transfer coefficient
     M               # Molar mass of SR product
-    n               # Number of electrons transferred in SR
+    z               # Ratio of Li to SEI moles
     ρ               # Density of SR product
+    σ               # Conductivity in the SEI layer
     U               # Open circuit potential of SR
     Lf₀             # Initial thickness of SR film
+    V̄               # SEI Partial molar volume
+    R               # SEI Resistivity
     j_sei₀          # Reaction exchange current
     c::Function     # Concentration dependence function
 end
@@ -41,9 +44,8 @@ Base.@kwdef mutable struct SolidParticleParameters
     L_sei₀ # Initial thickness of SEI film
 
     side_reactions::Vector{SideReactionParameters} = SideReactionParameters[]
-
-    z_0 = 0.0   # Stoichiometry at 0% SOC
-    z_100 = 1.0 # Stoichiometry at 100% SOC
+    z_0::Float64 = 0.0 
+    z_100::Float64 = 1.0
 end
 
 Base.@kwdef mutable struct BatteryParameters
@@ -51,7 +53,10 @@ Base.@kwdef mutable struct BatteryParameters
     n::SolidParticleParameters # Parameters for the negative electrode
     e::ElectrolyteParameters # Parameters for the electrolyte
     
-    i₀ # Typical current density for 1C in A/m^-2
+    i₀ # Typical current density for single C rate
+    Hcc # Current collector height
+    Wcc # Current collector width
+    n_el # Number of parallel electrodes
     Q₀ # Original battery capacity in Ah
 
     Vmin

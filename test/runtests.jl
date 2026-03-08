@@ -9,13 +9,11 @@
 
 # Import package manager
 using Pkg
-# Import module
-using BatteryPeck
-# Import package
-using Test
-
 # Activate Julia environment in current directory
-Pkg.activate(".")
+pkg.activate(".")
+
+# Import module
+using BatteryToolkit
 
 # Start tracking time
 println("Starting tests")
@@ -23,7 +21,7 @@ ti = time()
 
 # Run test
 @testset "BatteryPeck test" begin
-    @test 1 == 1    # placeholder test
+    @test 1 == 1
 end
 
 # Stop tracking time

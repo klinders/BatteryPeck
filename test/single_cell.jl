@@ -1,5 +1,5 @@
 using ModelingToolkit
-using BatteryPeck
+using BatteryToolkit
 using Plots
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical

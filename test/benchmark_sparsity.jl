@@ -12,12 +12,12 @@ using Plots.Measures
 using Printf
 
 using Revise
-using BatteryPeck
+using BatteryToolkit
 
 Revise.revise()
 
 function benchmark_jacobian()
-    # Setup parameters for 1C continuous discharge
+    # Setup parameters for single C continuous discharge
     p = Chen2020()
     soc_init = 1.0
     p.n.c₀ = (p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)) * p.n.c₊  
@@ -36,7 +36,7 @@ function benchmark_jacobian()
     atol = 1e-7
 
     # Define Jacobian test configurations
-    # jac=true is disabled due to array symbolics limitations
+    # Jacobian disabled due to array symbolics limitations
     configs = [
         ("Dense AutoDiff (Default)", false, false),
         ("Sparse AutoDiff (MTK pattern)", false, true)
@@ -50,7 +50,7 @@ function benchmark_jacobian()
         println("\nEvaluating: $label...")
         
         # Build ODE problem manually to pass jacobian arguments directly
-        prob = ODEProblem(sys, [sys.P => -20.0], (0.0, 3600.0), jac=use_jac, sparse=use_sparse)
+        prob = ODEProblem(sys, [sys.Pin => -20.0, sys.Iin => 0.0], (0.0, 3600.0), jac=use_jac, sparse=use_sparse)
         
         # Warm up compiler for specific configuration
         println("  Warming up...")
@@ -81,9 +81,10 @@ function benchmark_jacobian()
     println("="^65 * "\n")
 end
 
-benchmark_jacobian()
+# Safely invoke function to avoid world age errors
+Base.invokelatest(benchmark_jacobian)
 
-# Results:
+# Old results (symbolic potentials):
 # =================================================================
 # Sparsity performance comparison
 # -----------------------------------------------------------------
@@ -91,5 +92,17 @@ benchmark_jacobian()
 # -----------------------------------------------------------------
 # Dense AutoDiff (Default)       | 0.146           | 2.5000
 # Sparse AutoDiff (MTK pattern)  | 0.063           | 2.5000
+# -----------------------------------------------------------------
+# =================================================================
+
+
+# New results:
+# =================================================================
+# Sparsity performance comparison
+# -----------------------------------------------------------------
+# Configuration                  | Time (s)        | Final V
+# -----------------------------------------------------------------
+# Dense AutoDiff (Default)       | 0.004           | 2.5000
+# Sparse AutoDiff (MTK pattern)  | 0.007           | 2.5000
 # -----------------------------------------------------------------
 # =================================================================

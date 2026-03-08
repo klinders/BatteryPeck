@@ -12,24 +12,29 @@
 # Import packages
 using ModelingToolkit, OrdinaryDiffEq
 
-# Added alg=QNDF() as default, and explicit default tolerances
+# Base method compiles ODE problem every time for ease of use
 function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-4, abstol=1e-7, kwargs...)
     
-    # Convert symbolic ODE expressions into static code
-    # Added sparse=true to automatically leverage Sparse AutoDiff for speed
-    prob = ODEProblem(sys, [sys.P=>experiment.p0], (0.0,experiment.tend), sparse=true)
+    # Convert symbolic ODE expressions into static code using new power and current variables
+    prob = ODEProblem(sys, [sys.Pin=>experiment.p0, sys.Iin=>0.0], (0.0,experiment.tend))
 
-    # Stop simulation between every step, when inputs are modified between experiment stages
-    # Pass reltol and abstol variables into init function
+    # Route to fast method
+    return simulate(sys, prob, experiment, alg; reltol=reltol, abstol=abstol, kwargs...)
+end
+
+# Fast method accepts pre-compiled ODE problem to bypass compilation overhead during benchmarks or repeated runs
+function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-4, abstol=1e-7, kwargs...)
+    
+    # Stop simulation between every step when inputs are modified between experiment stages
     integrator = init(prob, alg; tstops=experiment.tstops, save_everystep=false, reltol=reltol, abstol=abstol, kwargs...)
 
     print("Simulating for: $(experiment.tend) seconds\n")
     
-    # Update integrator after every experiment step, and print time and voltage at each step
+    # Update integrator after every experiment step and print time and voltage at each step
     for (i, step) in enumerate(experiment.steps)
         println("  [Step $i] Starting at t = $(integrator.t)s")
         step!(integrator, sys, step)
-        println("  [Step $i] Finished at t = $(integrator.t)s | Current Voltage: $(integrator[sys.cell.v])V")
+        println("  [Step $i] Finished at t = $(integrator.t)s | Voltage: $(integrator[sys.cell.v])V")
 
         # Check if battery hit safety limit
         if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated

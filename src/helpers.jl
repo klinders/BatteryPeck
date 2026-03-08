@@ -14,12 +14,15 @@
 function D_face(Dleft, Dright, Δxleft, Δxright)
 
     # Harmonic mean of left and right diffusivities
-    return (Δxleft + Δxright)/(Δxleft/Dleft + Δxright/Dright)
+    beta = Δxleft/(Δxleft + Δxright)
+
+    return (Dleft*Dright)/(beta*Dright + (1-beta)*Dleft)
 end
 
 # Geometry builder for 3-region 1D FVM (cell-centered)
 # Inputs: ["Battery parameters"; "Number of cells per region"]
-# params used to extract region lengths, N defined as dictionary consisting of symbol-vector pairs, where vector defines the number of cells in each region
+# params used to extract region lengths, N defined as dictionary consisting of symbol-vector pairs, 
+# where vector defines the number of cells in each region
 function build_fvm_geometry(params::BatteryParameters, N::Dict{Symbol,Vector{Int}})
 
     # Determine FVM parameters for solid particles
@@ -38,8 +41,9 @@ function build_fvm_geometry(params::BatteryParameters, N::Dict{Symbol,Vector{Int
 
         return (Nᵣ=Nᵣ, Δr=Δr, r=r, Vᵢ=Vᵢ, Aₗ=Aₗ, Aᵣ=Aᵣ)
     end
-    
-    # FVM parameters determined separately for each particle, optionally with different resolutions
+
+    # FVM parameters determined separately for each particle, 
+    # optionally with different resolutions
     ne = solid_geometry(params.n, N[:Nᵣ][1])
     pe = solid_geometry(params.p, N[:Nᵣ][2])
 

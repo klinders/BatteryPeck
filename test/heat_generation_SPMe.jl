@@ -1,7 +1,7 @@
 # =====================================================================================================================
 # heat_generation_SPMe.jl
 #
-# Runs a (dis)charge profile and plots individual heat generation terms
+# Runs a charge or discharge profile and plots individual heat generation terms
 # =====================================================================================================================
 
 # Import packages
@@ -13,16 +13,16 @@ using Plots.Measures
 
 # Import module
 using Revise
-using BatteryPeck
+using BatteryToolkit
 
 Revise.revise()
 
 # Load parameters
 p = Chen2020()
 
-# 0% SoC
-p.n.c₀ = p.n.z_0 * p.n.c₊  # Empty negative electrode (Graphite)
-p.p.c₀ = p.p.z_0 * p.p.c₊  # Fill positive electrode (NMC811)
+# Set initial states
+p.n.c₀ = p.n.z_0 * p.n.c₊  # Empty negative electrode
+p.p.c₀ = p.p.z_0 * p.p.c₊  # Fill positive electrode
 p.Vmin = 2.4 # Lower event limit to prevent instant solver termination
 
 # Build system
@@ -33,17 +33,17 @@ exp = Experiment([
     RestStep(1),
     #PowerStep(30, 3600/1.5),
 
-    CurrentStep(-5 * 0.2, 3600/0.15), # 0.2C charge
-    #CurrentStep(-5 * 0.5, 3600/0.45), # 0.5C charge
-    #CurrentStep(-5 * 1.0, 3600/1.0), # 1.0C charge
-    #CurrentStep(-5 * 1.5, 3600/1.5), # 1.5C charge
-    #CurrentStep(-5 * 2.0, 3600/2.0), # 2.0C charge
+    CurrentStep(-5 * 0.2, 3600/0.15), # Low rate charge
+    #CurrentStep(-5 * 0.5, 3600/0.45), 
+    #CurrentStep(-5 * 1.0, 3600/1.0), 
+    #CurrentStep(-5 * 1.5, 3600/1.5), 
+    #CurrentStep(-5 * 2.0, 3600/2.0), 
 
-    #CurrentStep(5 * 0.2, 3600/0.15), # 0.2C discharge
-    #CurrentStep(5 * 0.5, 3600/0.45), # 0.5C discharge
-    #CurrentStep(5 * 1.0, 3600/1.0), # 1.0C discharge
-    #CurrentStep(5 * 1.5, 3600/1.5), # 1.5C discharge
-    #CurrentStep(5 * 2.0, 3600/2.0), # 2.0C discharge
+    #CurrentStep(5 * 0.2, 3600/0.15), # Low rate discharge
+    #CurrentStep(5 * 0.5, 3600/0.45), 
+    #CurrentStep(5 * 1.0, 3600/1.0), 
+    #CurrentStep(5 * 1.5, 3600/1.5), 
+    #CurrentStep(5 * 2.0, 3600/2.0), 
     RestStep(60),
 ])
 
@@ -55,17 +55,20 @@ t = sol.t
 println("Simulation ended at t = $(t[end]) seconds")
 println("Solver Status: ", sol.retcode)
 
-if t[end] < 10.0 # --- Debug for instant abort ---
-    println("ERROR: Simulation aborted almost immediately. Check initial conditions or Vmin/Vmax events.")
+if t[end] < 10.0 # Debug for instant abort
+    println("ERROR: Simulation aborted almost immediately. Check initial conditions or limits.")
 else
     # Extract variables from solution
     v = sol[sys.cell.v]            
     pack_current = sol[sys.I]
-    pack_power = sol[sys.P]
+    
+    # Calculate power manually since it is no longer tracked symbolically
+    pack_power = v .* pack_current
 
+    # Extract heat sources routing electrolyte heat to its encapsulated submodel
     q_rev = sol[sys.cell.Q_rev]
     q_irr = sol[sys.cell.Qᵢ]
-    q_ohm_e = sol[sys.cell.Qₑ]
+    q_ohm_e = sol[sys.cell.el.Qₑ]
     q_ohm_s = sol[sys.cell.Qₛ]
     q_film = sol[sys.cell.Qf]
     q_total = sol[sys.cell.Q_total]
@@ -74,7 +77,7 @@ else
     # Bar chart data processing
     # ---------------------------------------------------------
     N = length(t)
-    # Create 6 bin edges to make 5 equal sections across array length
+    # Create bin edges to make equal sections across array length
     bin_edges = round.(Int, range(1, stop=N, length=6))
     
     labels_bar = String[]
@@ -92,7 +95,7 @@ else
         sum_s   = sum(abs.(q_ohm_s[idx_start:idx_end]))
         sum_f   = sum(abs.(q_film[idx_start:idx_end]))
         
-        # Calculate total absolute heat, and prevent division by zero during rest steps
+        # Calculate total absolute heat and prevent division by zero during rest steps
         total_abs = sum_rev + sum_irr + sum_e + sum_s + sum_f
         total_abs = total_abs > 0 ? total_abs : 1.0 
         
@@ -103,7 +106,7 @@ else
         q_s_bar[i]   = 100 * sum_s / total_abs
         q_f_bar[i]   = 100 * sum_f / total_abs
         
-        # Create x-axis time period labels
+        # Create axis time period labels
         t_start = round(Int, t[idx_start])
         t_end = round(Int, t[idx_end])
         push!(labels_bar, "$(t_start)s-\n$(t_end)s")
@@ -113,16 +116,16 @@ else
     # Plotting code
     # ---------------------------------------------------------
     
-    # Time
+    # Time limits
     xlim_range = (t[1], t[end]) 
 
     # Margins
     m = 7mm
 
-    # MATLAB colour scheme
+    # Colour scheme
     matlab_colors = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30", "#4DBEEE", "#A2142F"]
 
-    # Heat sources vs. time (top)
+    # Heat sources versus time
     p_heat = plot(t, q_rev, label="Reversible", ylabel="Volumetric heat (W/m³)", 
                   title="Heat generation sources", 
                   lw=2, legend=:bottomright, xlims=xlim_range, 
@@ -135,17 +138,16 @@ else
     plot!(p_heat, t, q_total, label="Total", lw=2, linestyle=:dash, color=:black)
 
     # ---------------------------------------------------------
-    # Voltage and current vs. time (middle)
+    # Voltage and current versus time
     # ---------------------------------------------------------
     p_volt_curr = plot(t, v, label="Voltage", ylabel="Voltage (V)", lw=2, color=matlab_colors[1], 
                        legend=:bottomright, xlims=xlim_range,
                        left_margin=m, right_margin=m, top_margin=0mm, bottom_margin=0mm)
-    # ylims=(2.5, 4.6)
     
     # Dummy trace for current so both labels share primary legend box
     plot!(p_volt_curr, [NaN], [NaN], label="Current", lw=2, color=matlab_colors[2])
 
-    # Secondary axis (current)
+    # Secondary axis
     p_twin = twinx(p_volt_curr)
     
     # Add identical invisible legend to twin axis to squeeze it by exact same amount as plot beneath it
@@ -162,14 +164,14 @@ else
     plot!(p_twin, [NaN], [NaN], label="Current", color=:transparent)
 
     # ---------------------------------------------------------
-    # Power vs. time (bottom)
+    # Power versus time
     # ---------------------------------------------------------
     p_pow = plot(t, pack_power, label="Power", xlabel="Time (s)", ylabel="Power (W)", lw=2, 
                  color=matlab_colors[4], legend=:bottomright, xlims=xlim_range, 
                  left_margin=m, right_margin=m, top_margin=0mm, bottom_margin=m)
 
     # ---------------------------------------------------------
-    # Stacked bar chart (right column)
+    # Stacked bar chart
     # ---------------------------------------------------------
     stack_5 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar .+ q_f_bar 
     stack_4 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar
@@ -186,7 +188,7 @@ else
     bar!(p_bar, labels_bar, stack_2, label="Irreversible", color=matlab_colors[2], lw=0)
     bar!(p_bar, labels_bar, stack_1, label="Reversible", color=matlab_colors[1], lw=0)
 
-    # Multi-figure layout
+    # Layout configuration
     l = @layout [
         [a{0.6h}; b; c] d{0.35w}
     ]
@@ -195,6 +197,3 @@ else
     
     display(p_combined)
 end
-
-
-# include("BatteryPeck/test/test_heat_cc.jl")

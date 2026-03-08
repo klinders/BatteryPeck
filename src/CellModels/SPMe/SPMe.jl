@@ -11,156 +11,213 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
-# Import functions and equations
 include("SolidParticle.jl")
 include("Electrolyte.jl")
 include("Potentials.jl")
 include("SEIGrowth.jl")
-include("Heat.jl")
 
-# Initialise potentials as symbolic functions (system does not look inside functions immediately)
-@register_symbolic U₀_f(params::BatteryParameters, ne, pe)
-@register_symbolic ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ne, pe,i_app, T)
-@register_symbolic ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, T) 
-@register_symbolic Δϕₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app)
-@register_symbolic Δϕₛ_f(params::BatteryParameters, g::NamedTuple, i_app)
-@register_symbolic Δϕf_f(params::BatteryParameters, g::NamedTuple, i_app)
+import NaNMath
 
-# Initialise heat sources as symbolic functions
-@register_symbolic Qₑ_f(params, g, cₑ::Symbolics.AbstractArray, ϵ::Symbolics.AbstractArray, i_app, ηₑ) # Heat generated from electrolyte
-@register_symbolic Qᵢ_f(params::BatteryParameters, g::NamedTuple, i_app, ηᵣ)                           # Irreversible heat
-@register_symbolic Qₛ_f(params::BatteryParameters, g::NamedTuple, i_app, Δϕₛ)                           # Solid phase (electrodes) Ohmic Heat Generation
-@register_symbolic Qf_f(params::BatteryParameters, g::NamedTuple, i_app, Δϕf)                          # Film Ohmic heat generation
-@register_symbolic Q_rev_f(params::BatteryParameters, g::NamedTuple, i_app, T, c_s_n_surf, c_s_p_surf) # Reversible (entropic) heat generation
+# Polynomial fit parameters entropic term positive electrode
+const P_coeff_pos = (
+    a1 = 0.04006, b1 = 0.2828, c1 = 0.0009855,
+    a2 = -0.06656, b2 = 0.8032, c2 = 0.02179
+)
+
+# Polynomial fit parameters entropic term negative electrode
+const P_coeff_neg = (
+    a0 = -0.111, b0 = 0.02901,
+    a1 = 0.3562, b1 = 0.08308, c1 = 0.004621
+)
+
+# Entropic term positive electrode
+function dUp_dT_f(z)
+    p = P_coeff_pos
+    val_mV = p.a1 * exp(-((z - p.b1)^2) / p.c1) + p.a2 * exp(-((z - p.b2)^2) / p.c2)
+    return val_mV * 1e-3
+end
+
+# Entropic term negative electrode
+function dUn_dT_f(z)
+    p = P_coeff_neg
+    val_mV = p.a0 * z + p.b0 + p.a1 * exp(-((z - p.b1)^2) / p.c1)
+    return val_mV * 1e-3
+end
 
 # Initiate end of experiment
 function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
+    t = round(int.t,digits=2)
+    @warn "Simulation step terminated at t=$t"
     return (;)
 end
 
-# SPMe implementation
-function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
-    # Independent variables
-    @parameters begin
-        t # Time
-    end
+"""
+The SPMe model implemented based on [MarquisEtAl2019](@citet) and [BrosaPlanellaWidanage2023](@citet)
 
-    # Build FVM geometry
+**Arguments**
+- `name` (optional) defaults to SPMe
+- `params ::BatteryParameters` Parameters from the given parameter set
+- `Q ::Real` (optional) The capacity of the cell in Ah
+- `N ::Dict(:Nₓ=>[::Int, ::Int, ::Int], :Nᵣ=>[::Int, ::Int])` (optional) number of mesh nodes in the particles and electrolyte
+- `side_reactions ::Bool` (optional) enable side reactions
+
+"""
+function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
+    @parameters begin
+        t # Time variable
+    end
+    Dt = Differential(t)
+
     g = build_fvm_geometry(params, N)
     
-    # Components
-    @named p = Pin()                # Positive terminal
-    @named n = Pin()                # Negative terminal
-    @named T = RealInput(guess=298) # Ambient temperature
-    # @named I = RealInput(guess=0.0) # Current
-    # @named Q = RealOutput() # Generated heat
-    @named pe = SolidParticle(p=params.p, g=g.pe) # Positive electrode
-    @named ne = SolidParticle(p=params.n, g=g.ne) # Negative electrode
-    @named el = Electrolyte(p=params.e, g=g.el)   # Electrolyte
-    #@named sei = SEIGrowth(p=params.n.side_reactions[1], s=params.n, g=g) # Assuming first side reaction is SEI
+    # Electrical ports
+    @named p = Pin()
+    @named n = Pin()
+    @named T = RealInput(guess=298)
 
-    # Bundle all components
-    submodels = [p, n, T, pe, ne, el]
-    #submodels = [p, n, T, pe, ne, el, sei]
-    
-    # Side reactions
-    # if !isnothing(params.sei)
-    #     @named sei = SideReaction(name="SEI side reaction", p=params.sei)
-    #     push!(submodels, sei)
-    # end
+    # @named Q = RealOutput()
+    @named pe = SolidParticle(p=params.p, g=g.pe)
+    @named ne = SolidParticle(p=params.n, g=g.ne)
+    @named el = Electrolyte(p=params.e, g=g.el)
+    @named sei = SEIGrowth(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
 
-    # if !isnothing(params.li_plating)
-    #     @named plating = SideReaction(name="Lithium Plating", p=params.sei)
-    #     push!(submodels, plating)
-    # end
+    submodels = [p,n,T,pe,ne,el,sei]
 
-    # Time-dependent state variables
     @variables begin
-        v(t), [guess=4.19]  # Terminal voltage
-        i(t), [guess=0]  # Current
-        soc(t)                    # State of charge
+        # Terminal voltage and current
+        v(t)
+        i(t)
+        soc(t)
 
-        #(ϕₙ(t))[1:g.el.Nx[1]]
-        #(ϕₚ(t))[1:g.el.Nx[3]]
+        U₀(t)
+        ηᵣ(t)
+        (ηₙ(t))[1:g.el.Nx[1]]
+        (ηₚ(t))[1:g.el.Nx[3]]
+        Δϕₛ(t), [guess=0]
+        # Δϕf(t)
+        (ϕₙ(t))[1:g.el.Nx[1]]
+        (ϕₚ(t))[1:g.el.Nx[3]]
+        (jₙ0(t))[1:g.el.Nx[1]]
+        (jₚ0(t))[1:g.el.Nx[3]]
+        j̄ₙ0(t)
+        j̄ₚ0(t)
+        ϕ̄ₙ(t)
+        ϕ̄ₚ(t)
+        aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
+        aₚ(t)
 
-        U₀(t)    # Open-circuit potential
-        ηᵣ(t)    # Intercalation reaction overpotential
-        ηₑ(t)    # Electrolyte concentration overpotential
-        Δϕₑ(t)   # Electrolyte Ohmic loss
-        Δϕₛ(t)    # Separator Ohmic loss
-        Δϕf(t)   # Film Ohmic loss
-        # Rᵢ(t)   # Equivalent resistance
+        Rᵢ(t)
 
-        Qₑ(t)       # Electrolyte Ohmic heat
+        # Heat generation sources
         Qᵢ(t)       # Reaction heat
-        Qₛ(t)        # Solid Ohmic heat
+        Qₛ(t)       # Solid Ohmic heat
         Qf(t)       # Film Ohmic heat
         Q_rev(t)    # Reversible heat
         Q_total(t)  # Total heat
     end
 
-    # Initialise capacity
     if Q==0
         Q = params.Q₀
     end
     
-    # Applied current density (scaled to electrode area)
-    i_app = i/Q*params.i₀
-    
-    # Concatenate porosity vectors
-    ϵ = [
-        [el.ϵₙ for _ in g.el.ixₙ]; # Negative electrode
-        [el.ϵₛ for _ in g.el.ixₛ]; # Separator
-        [el.ϵₚ for _ in g.el.ixₚ]; # Positive electrode
-    ]
+    # Scale the current density to the electrode area
+    A = params.Hcc*params.Wcc*params.n_el*(Q/params.Q₀)
+    i_app = i/A
 
-    # Time derivative
-    D = Differential(t)
+    # X-average
+    x = g.el.x_centers
+    L = sum(g.el.Ls)
+    # Exchange current densities
+
+    ## Reaction overpotentials ##
+
+    R = 8.314 # Universal gas constant
+    F = 96485 # Faraday's constant
+    # jₙ0 = [params.n.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.n.c₊-cₛ[i])) for i in g.el.ixₙ]
+    # jₚ0 = [params.p.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.p.c₊-cₛ[i])) for i in g.el.ixₚ]
+    Nn = length(g.el.ixₙ)
+    Np = length(g.el.ixₚ)
+
+    # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
+    # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
-    # Equations
+    ηᵣn = 2*R*T.u/F*asinh(ne.J.u/params.n.aₖ/2/j̄ₙ0)
+    ηᵣp = 2*R*T.u/F*asinh(pe.J.u/params.p.aₖ/2/j̄ₚ0)
+
+    # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
+    # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
+
+    # X-average of the electrolyte potential
+    ϕₛ_n = [i_app*(x[i] - 2*params.e.Lₙ)*x[i]/2/params.n.σₖ/params.e.Lₙ for i in g.el.ixₙ]
+    ϕₛ_p = [i_app*(x[i] + (x[i] - L)^2/(2*params.e.Lₚ))/params.p.σₖ for i in g.el.ixₚ]
+
     eqns = [
         # Temperatures
-        el.T.u ~ T.u, # Electrolyte
-        pe.T.u ~ T.u, # Positive electrode
-        ne.T.u ~ T.u, # Negative electrode
-
-        # State of charge, function of stoichiometry of negative electrode (Fig. 4, p. 7 [2])
-        soc ~ (ne.z - params.n.z_0) / (params.n.z_100 - params.n.z_0),
+        el.T.u ~ T.u,
+        pe.T.u ~ T.u,
+        ne.T.u ~ T.u,
+        soc ~ ne.z,
 
         # Potentials
-        U₀ ~ U₀_f(params, ne.c_surf, pe.c_surf),                        # Open-circuit potential
-        ηᵣ ~ ηᵣ_f(params, g, el.cₑ, ne.c_surf, pe.c_surf, i_app, T.u),  # Intercalation reaction overpotential
-        ηₑ ~ ηₑ_f(params, g, el.cₑ, T.u),                               # Electrolyte concentration overpotential
-        Δϕₑ ~ Δϕₑ_f(params, g, el.cₑ, ϵ, i_app),                        # Electrolyte Ohmic loss
-        Δϕₛ ~ Δϕₛ_f(params, g, i_app),                                   # Separator Ohmic loss
-        Δϕf ~ Δϕf_f(params, g, i_app),                                  # Film Ohmic loss
-        v ~ U₀ + ηᵣ + ηₑ + Δϕₑ + Δϕₛ + Δϕf,                              # Terminal voltage (Eq. 12)
-        # Rᵢ ~ (U₀-v)/i,                                                # Equivalent resistance
+        U₀ ~ pe.U₀ - ne.U₀,
+        ηᵣ ~ ηᵣp - ηᵣn,
+        Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
-        # Heat sources
-        Qₑ ~ Qₑ_f(params, g, el.cₑ, ϵ, i_app, ηₑ),
-        Qᵢ ~ Qᵢ_f(params, g, i_app, ηᵣ),
-        Qₛ ~ Qₛ_f(params, g, i_app, Δϕₛ),
-        Qf ~ Qf_f(params, g, i_app, Δϕf),
-        Q_rev ~ Q_rev_f(params, g, i_app, T.u, ne.c_surf, pe.c_surf),
-        Q_total ~ Qₑ + Qᵢ + Qₛ + Qf + Q_rev,
-        
-        # i ~ I.u,
-        v ~ p.v - n.v,  # Terminal voltage (Eq. 11)
-        0 ~ p.i + n.i,  # Current in = current out
-        i ~ p.i,        # Current
+        # Exchange current densities
+        [jₙ0[i] ~ params.n.mₖ*sqrt(el.cₑ[g.el.ixₙ[i]]*ne.c_surf*(params.n.c₊-ne.c_surf)) for i in 1:Nn]...,
+        [jₚ0[i] ~ params.p.mₖ*sqrt(el.cₑ[g.el.ixₚ[i]]*pe.c_surf*(params.p.c₊-pe.c_surf)) for i in 1:Np]...,
+        j̄ₙ0 ~ sum(jₙ0)/Nn,
+        j̄ₚ0 ~ sum(jₚ0)/Np,
+
+        [ϕₙ[i] ~ n.v + ϕₛ_n[i] for i in 1:Nn]...,
+        [ϕₚ[i] ~ p.v - ϕₛ_p[i] for i in 1:Np]...,
+        [ηₙ[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
+        ϕ̄ₙ ~ sum(ϕₙ)/Nn,
+        ϕ̄ₚ ~ sum(ϕₚ)/Np,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
+        Rᵢ ~ (U₀-v)/i, 
+
+        v ~ p.v - n.v,
+        0 ~ p.i + n.i,
+        i ~ p.i,
 
         # Electrolyte current density
         el.i_app.u ~ i_app,
+        # el.jₙ0.u ~ jₙ0,
+        el.ϕₛn.u ~ ϕ̄ₙ,
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣn - sei.ϕf_x,
 
         # Volumetric current density
-        pe.J.u ~ -i_app/params.e.Lₚ, # Positive electrode
-        ne.J.u ~  i_app/params.e.Lₙ, # Negative electrode
-        #Jₛᵣ ~ parameters.p.mₖ * pp.c_avr^1.5 * (pp.Uₖ - parameters.p.Uₖ) # Side reaction, positive electrode
+        pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
+        ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
+        
+        aₙ ~ 3*(1-el.ϵ̄ₙ)/params.n.Rₖ,
+        aₚ ~ params.p.aₖ,#3*(1-el.ϵ̄ₚ)/params.p.Rₖ,
+
+        # # Ne sei reaction
+        sei.J.u ~ ne.J.u, # Current density for SEI side reaction
+        sei.T.u ~ T.u,
+        sei.aₖ.u ~ aₙ,
+        [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        
+        # Porosity (assumed constant)
+        [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
+        [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
+        [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
+
+        # Heat sources
+        Qᵢ ~ -i_app * ηᵣ / L,
+        Qₛ ~ -i_app * Δϕₛ / L,
+        Qf ~ -i_app * sei.ϕf_x / L,
+        Q_rev ~ (i_app / L) * T.u * (dUn_dT_f(ne.z) - dUp_dT_f(pe.z)),
+        
+        # Total generated heat 
+        Q_total ~ el.Qₑ + Qᵢ + Qₛ + Qf + Q_rev
     ]
 
-    # Events abort simulation when parameters go out of bounds
+    # Terminate simulation when limits reached
     events = [
         [
             v ~ params.Vmin,
@@ -172,6 +229,5 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ]=>(abort!,(;))
     ]
 
-    # Return aggregrate of symbolic system equations
-    return System(eqns, t; name=name, systems=submodels, continuous_events=events)
+    return System(eqns, t; name=name,systems=submodels, continuous_events=events)
 end

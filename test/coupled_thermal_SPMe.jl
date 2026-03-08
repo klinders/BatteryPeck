@@ -10,7 +10,7 @@ using ModelingToolkitStandardLibrary.Electrical
 using Plots.Measures
 
 using Revise
-using BatteryPeck
+using BatteryToolkit
 
 Revise.revise()
 
