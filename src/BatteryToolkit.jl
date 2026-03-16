@@ -20,7 +20,10 @@ include("PackModels/MultiCellPack.jl")
 
 include("PackModels/SingleCellCoreShellPack.jl")
 
+include("ThermalModels/PackGeometry.jl")
+
 export SPMe, Chen2020, BatteryParameters, PowerStep, CurrentStep, DriveStep,
        RestStep, ChargeStep, CurrentDriveStep, SingleCellPack, MultiCellPack, Experiment, 
-       simulate, CoreShellCell, TemperatureDependentJellyroll, SingleCellCoreShellPack
+       simulate, CoreShellCell, TemperatureDependentJellyroll, SingleCellCoreShellPack,
+       PackGeometry, build_pack_geometry
 end
