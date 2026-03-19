@@ -113,7 +113,7 @@ function Base.:*(a::AbstractVector{<:Step}, n::Integer)
 end
 
 function Base.:+(a::AbstractVector{<:Step}, b::AbstractVector{<:Step})
-    return [a;b]
+    return vcat(a,b)
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)

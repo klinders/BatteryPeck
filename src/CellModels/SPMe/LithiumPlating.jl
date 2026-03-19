@@ -23,7 +23,7 @@ function LithiumPlating(; name, p::SideReactionParameters, s::SolidParticleParam
     scale = 1000 # c_typical
     α_plating = 0.65 # Li plating transfer coefficient
     α_stripping = 1 - α_plating
-    k_plating = 1e-09
+    k_plating = 1e-11
 
     @variables begin
         # Plating concentration
