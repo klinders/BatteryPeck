@@ -115,7 +115,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     end
     
     # Represents tunable contact resistance between cell and cooling ribbon
-    R_contact_val = 1.0 
+    R_contact_val = 2.7 
     
     contact_resistors = [ThermalResistor(name=Symbol("R_contact_$idx"), R=R_contact_val) 
                          for idx in 1:length(geom.convection_edges)]

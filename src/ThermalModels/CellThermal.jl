@@ -77,21 +77,22 @@ Editable values:
 @component function CoreShellCell(; name, T_start=298.15)
     @parameters begin
         t
+        
         # Jellyroll volume (Tab. 3)[1]
         V_jellyroll = 2.13e-5 
         
         # Harmonic mean of layers yields k_rad ≈ 1.13 W/mK
-        # Solid cylinder with internal generation: R = 1 / (4 * pi * L * k)
-         #R_rad_val = 1.07 
-
         # Halved from 1.07 to represent T_avg instead of from centre to edge
-         R_rad_val = 0.535 
+        R_rad_val = 0.535 
         
         # Volumetric mean yields k_ax ≈ 42 W/mK
-        # Cell cylinder resistance = 1.21 K/W
-        # Plastic insulator caps (0.22mm bottom, 0.2mm top) add ~1.62 K/W bottleneck
-        R_ax_val = 2.83 
+        # Cell cylinder internal resistance = 1.21 K/W
+        # Volume-averaged internal resistance = 1.21 / 2 = 0.605 K/W
+        # Plastic insulator caps (0.22mm bottom, 0.2mm top) add ~1.62 K/W boundary bottleneck
+        # Total axial resistance = 0.605 + 1.62 = 2.225 K/W
+        R_ax_val = 2.225 
         
+        # Shell thermal capacity
         # Mass = 10.64g
         # Specific heat (SS type 304) = 477 J/kgK (Tab. 7)[1]
         # C_th = 0.01064 * 477

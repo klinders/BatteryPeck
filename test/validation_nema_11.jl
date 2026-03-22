@@ -1,5 +1,5 @@
 # ==============================================================================
-# validation_nema_hydraulics.jl
+# validation_nema_11.jl     (hydraulics)
 # Validates the LPTN pressure drop and pump power against Nema 2026 (Fig 11a/11b)
 #
 # FORENSIC DISCOVERIES & CORRECTIONS VS. NEMA 2026:
