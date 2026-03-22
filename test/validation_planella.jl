@@ -57,7 +57,6 @@ function validate_planella(target_crate="All")
     end
 
     # Dictionary for Planella pre fitted parameters
-    # Format matches temperature to rate to negative electrode diffusion coefficient and ambient temperature
     fitted_params = Dict(
         0.0 => Dict(
             "0.5C" => (0.22e-14, 0.02),
@@ -88,7 +87,7 @@ function validate_planella(target_crate="All")
     master_plots = []
     
     # Define unique colours for temperature groups
-    temp_colors = ["#0072BD", "#D95319", "#EDB120"]
+    temp_colours = ["#0072BD", "#D95319", "#EDB120"]
 
     for (temp_idx, (T_celsius, h_opt, files)) in enumerate(temp_groups)
         println("\nProcessing $(T_celsius)°C group...")
@@ -96,10 +95,10 @@ function validate_planella(target_crate="All")
         # Initialise plot subplots per temperature forcing left margin to prevent clipping
         m = 7mm
         p_volt = plot(ylabel="Voltage (V)", legend=:bottomleft, margin=m, left_margin=15mm)
-        p_temp = plot(ylabel="Temperature (°C)", legend=:topleft, margin=m, left_margin=15mm)
+        p_temp = plot(xlabel="Time (s)", ylabel="Temperature (°C)", legend=:topleft, margin=m, left_margin=15mm)
         
         # Select colour for current temperature group
-        current_color = temp_colors[temp_idx]
+        current_colour = temp_colours[temp_idx]
         
         # Arrays to store group metrics for subplot title
         group_rmse_v = Float64[]
@@ -119,24 +118,56 @@ function validate_planella(target_crate="All")
             v_exp = df[!, "Voltage"]
             T_surf_exp = df[!, "LogTemp001"]
             p_exp = df[!, "Watt"]
+            status_col = hasproperty(df, :status) ? df[!, "status"] : df[!, "Status"]
+
+            # Identify first segment starting exactly at discharge
+            start_idx = 1
+            for i in 2:nrow(df)
+                prev_stat = strip(String(status_col[i-1]))
+                curr_stat = strip(String(status_col[i]))
+                if prev_stat != "DCH" && curr_stat == "DCH"
+                    start_idx = i - 1
+                    break
+                end
+            end
+
+            end_idx = nrow(df)
+            for i in (start_idx + 1):nrow(df)
+                curr_stat = strip(String(status_col[i]))
+                if curr_stat == "CHA"
+                    end_idx = i - 1
+                    break
+                end
+            end
+
+            # Extract segment data
+            t_seg = t_exp[start_idx:end_idx]
+            v_seg = v_exp[start_idx:end_idx]
+            T_surf_seg = T_surf_exp[start_idx:end_idx]
+            p_seg = p_exp[start_idx:end_idx]
+
+            # Local time vector starting from zero for simulator and plotting
+            t_sim_input = t_seg .- t_seg[1]
 
             # Extract parameters from dictionary matching current temperature and rate
             D_n_opt, T_amb_opt = fitted_params[T_celsius][Crate]
 
             # Extract initial ambient temperature from dictionary or CSV
             if isnothing(T_amb_opt)
-                T_amb_K = T_surf_exp[1] + 273.15
+                T_amb_K = T_surf_seg[1] + 273.15
             else
                 T_amb_K = T_amb_opt + 273.15
             end
 
-            # Read initial voltage from CSV to calculate state of charge
-            soc_init = v_to_soc_interp(v_exp[1])
+            # Read initial voltage from segment to calculate state of charge
+            v_init = v_seg[1]
+            soc_init = v_to_soc_interp(v_init)
 
             # Set up parameters
             p = Chen2020()
             p.n.c₀ = (p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)) * p.n.c₊  
             p.p.c₀ = (p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)) * p.p.c₊
+            
             # Wrap diffusion parameter in function of concentration to match model architecture
             p.n.Dₖ = c -> D_n_opt
             
@@ -145,18 +176,19 @@ function validate_planella(target_crate="All")
             p.Vmax = 5.5
 
             println("    Building and compiling MTK system...")
+            
             # Build MTK system using optimised heat transfer coefficient and specific parameters
             @mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=h_opt, T_ambient=T_amb_K)
 
             # Calculate time steps and clean empty time rows
-            raw_dt = diff(t_exp)
+            raw_dt = diff(t_sim_input)
             valid_indices = findall(x -> x > 0.0, raw_dt)
             
             clean_dt = raw_dt[valid_indices]
-            clean_p = p_exp[valid_indices]
+            clean_p = p_seg[valid_indices]
             clean_T_amb = fill(T_amb_K, length(clean_dt))
             
-            exp_duration = t_exp[end]
+            exp_duration = t_sim_input[end]
 
             # Define experiment using cleaned data array
             step = BatteryToolkit.DriveStep(Any[clean_dt, clean_p, clean_T_amb], exp_duration)
@@ -164,12 +196,12 @@ function validate_planella(target_crate="All")
 
             # Run simulation and capture solve time while silencing internal package warnings
             t_start = time()
-            sol = with_logger(NullLogger()) do
+            local sol = with_logger(NullLogger()) do
                 simulate(sys, exp; saveat=10.0, verbose=false)
             end
             push!(solve_times, time() - t_start)
 
-            # Extract results
+            # Extract results directly from zero based solution
             t_sim = sol.t
             v_sim = sol[sys.cell.v]
             T_shell_sim = sol[sys.thermal.shell_cap.T] .- 273.15
@@ -178,30 +210,30 @@ function validate_planella(target_crate="All")
             v_sim_interp = LinearInterpolation(v_sim, t_sim)
             T_sim_interp = LinearInterpolation(T_shell_sim, t_sim)
             
-            # Filter experimental data to match simulation timeframe
-            valid_t_idx = findall(t -> t_sim[1] <= t <= t_sim[end], t_exp)
-            t_exp_valid = t_exp[valid_t_idx]
-            v_exp_valid = v_exp[valid_t_idx]
-            T_surf_exp_valid = T_surf_exp[valid_t_idx]
-            
-            # Map simulation to valid experimental timestamps
-            v_sim_mapped = v_sim_interp.(t_exp_valid)
-            T_sim_mapped = T_sim_interp.(t_exp_valid)
+            # Match lengths in case simulation terminates early
+            valid_t_idx = findall(t -> t_sim[1] <= t <= t_sim[end], t_sim_input)
+            t_eval_valid = t_sim_input[valid_t_idx]
+            v_seg_valid = v_seg[valid_t_idx]
+            T_surf_seg_valid = T_surf_seg[valid_t_idx]
+
+            # Map simulation to zero based segment experimental timestamps
+            v_sim_mapped = v_sim_interp.(t_eval_valid)
+            T_sim_mapped = T_sim_interp.(t_eval_valid)
 
             # Calculate coefficient of determination helper function
             function calculate_r2(exp_data, sim_mapped)
                 ss_res = sum((exp_data .- sim_mapped).^2)
                 ss_tot = sum((exp_data .- mean(exp_data)).^2)
-                return 1.0 - (ss_res / ss_tot)
+                return ss_tot == 0 ? 0.0 : 1.0 - (ss_res / ss_tot)
             end
 
             # Calculate voltage metrics
-            rmse_v_mv = sqrt(mean((v_sim_mapped .- v_exp_valid).^2)) * 1000
-            r2_v = calculate_r2(v_exp_valid, v_sim_mapped)
+            rmse_v_mv = sqrt(mean((v_sim_mapped .- v_seg_valid).^2)) * 1000
+            r2_v = calculate_r2(v_seg_valid, v_sim_mapped)
             
             # Calculate temperature metrics
-            rmse_T = sqrt(mean((T_sim_mapped .- T_surf_exp_valid).^2))
-            r2_T = calculate_r2(T_surf_exp_valid, T_sim_mapped)
+            rmse_T = sqrt(mean((T_sim_mapped .- T_surf_seg_valid).^2))
+            r2_T = calculate_r2(T_surf_seg_valid, T_sim_mapped)
 
             # Store in matrix
             data_rows[row_idx, 1] = round(rmse_v_mv, digits=2)
@@ -218,12 +250,12 @@ function validate_planella(target_crate="All")
             label_exp = "Exp. " * Crate
             label_sim = "Sim. " * Crate
             
-            # Add to plots using unified colour for temperature group
-            plot!(p_volt, t_exp, v_exp, label=label_exp, lw=2, color=:black, linestyle=:dash)
-            plot!(p_volt, t_sim, v_sim, label=label_sim, lw=2, color=current_color, linestyle=:solid)
+            # Add to plots using unified colour for temperature group plotting from zero
+            plot!(p_volt, t_sim_input, v_seg, label=label_exp, lw=2, color=:black, linestyle=:dash)
+            plot!(p_volt, t_sim, v_sim, label=label_sim, lw=2, color=current_colour, linestyle=:solid)
 
-            plot!(p_temp, t_exp, T_surf_exp, label=label_exp, lw=2, color=:black, linestyle=:dash)
-            plot!(p_temp, t_sim, T_shell_sim, label=label_sim, lw=2, color=current_color, linestyle=:solid)
+            plot!(p_temp, t_sim_input, T_surf_seg, label=label_exp, lw=2, color=:black, linestyle=:dash)
+            plot!(p_temp, t_sim, T_shell_sim, label=label_sim, lw=2, color=current_colour, linestyle=:solid)
         end
         
         # Calculate average root mean square error for temperature group
@@ -262,12 +294,4 @@ end
 
 # Run validation sequence safely
 # Pass "0.5C", "1C", or "2C" to run a specific rate
-Base.invokelatest(validate_planella, "1C")
-
-# Final Model Performance Metrics
-# Test               | Voltage RMSE (mV)  | Voltage R² | Temp RMSE (°C) | Temp R²
-# 0.0°C, 0.5C        | 141.24             | 0.8936     | 0.38           | 0.9569
-# 10.0°C, 0.5C       | 148.63             | 0.8872     | 0.30           | 0.9612
-# 25.0°C, 0.5C       | 60.85              | 0.9846     | 0.31           | 0.9372
-# Average solve time: 12.4 seconds
-
+Base.invokelatest(validate_planella, "0.5C")

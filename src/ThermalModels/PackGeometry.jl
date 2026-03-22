@@ -22,7 +22,7 @@ struct PackGeometry
 end
 
 """
-build_pack_geometry(; rows, cols, pattern, tms_routing, tms_encasement, cell_pitch)
+    build_pack_geometry(; rows, cols, pattern, tms_routing, tms_encasement, cell_pitch)
 
 Generates spatial layout and multi-physics graph edges for battery pack.
 

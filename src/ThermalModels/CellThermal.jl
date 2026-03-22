@@ -10,8 +10,19 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Thermal
 using ModelingToolkitStandardLibrary.Blocks
 
-# Temperature-dependent jellyroll
-# Contains heat source, thermal resistances, and thermal capacitance
+"""
+    TemperatureDependentJellyroll(; name, m_jelly=0.05708, T_start=300)
+
+Temperature-dependent jellyroll component containing heat source, thermal resistances, and thermal capacitance.
+
+Equations:
+Specific heat (C_p) uses third-order polynomials for constituent materials.
+Heat capacity dynamics: dT/dt = Q_flow / (mass * C_p)
+
+Editable values:
+`m_jelly`: Alters total mass of jellyroll, affecting thermal inertia.
+`T_start`: Sets initial thermal state.
+"""
 @component function TemperatureDependentJellyroll(; name, m_jelly=0.05708, T_start=300)
     @named port = HeatPort()
     
@@ -29,7 +40,7 @@ using ModelingToolkitStandardLibrary.Blocks
     
     # Specific heat equations
     # Mass fractions calculated from (Tab. 4)[1]
-    # 3rd-order polynomials from (Tab. S4)[1]
+    # Third-order polynomials from (Tab. S4)[1]
     eqs = [
         T ~ port.T,
         
@@ -50,31 +61,44 @@ using ModelingToolkitStandardLibrary.Blocks
     return ODESystem(eqs, t, [T, C_p], [mass]; name=name, systems=[port])
 end
 
+"""
+    CoreShellCell(; name, T_start=298.15)
 
-# Core-shell LPTN architecture
+Core-shell LPTN architecture component.
+Models internal radial and axial heat transfer pathways.
+
+Equations:
+Solid cylinder with internal generation: R = 1 / (4 * pi * L * k)
+Lumped average-mass node: R = 1 / (8 * pi * L * k)
+
+Editable values:
+`T_start`: Sets initial boundary temperature.
+"""
 @component function CoreShellCell(; name, T_start=298.15)
     @parameters begin
         t
         # Jellyroll volume (Tab. 3)[1]
-        V_jellyroll = 2.13e-5 # m³
+        V_jellyroll = 2.13e-5 
         
-        # Jellyroll thermal resistances:
-        # R_radial: harmonic mean of layers yields k_rad ≈ 1.13 W/mK
-        # For solid cylinder with internal generation: R = 1 / (4 * pi * L * k)
-        R_rad_val = 1.07 # K/W
+        # Harmonic mean of layers yields k_rad ≈ 1.13 W/mK
+        # Solid cylinder with internal generation: R = 1 / (4 * pi * L * k)
+         #R_rad_val = 1.07 
+
+        # Halved from 1.07 to represent T_avg instead of from centre to edge
+         R_rad_val = 0.535 
         
-        # R_axial: volumetric mean yields k_ax ≈ 42 W/mK. 
+        # Volumetric mean yields k_ax ≈ 42 W/mK
         # Cell cylinder resistance = 1.21 K/W
-        # Plastic insulator caps (0.22mm bottom, 0.2mm top) add ~1.62 K/W bottleneck.
-        R_ax_val = 2.83 # K/W
+        # Plastic insulator caps (0.22mm bottom, 0.2mm top) add ~1.62 K/W bottleneck
+        R_ax_val = 2.83 
         
-        # Shell thermal capacity:
-        # Mass = 10.64g. Specific heat (SS type 304) = 477 J/kgK (Tab. 7)[1]
+        # Mass = 10.64g
+        # Specific heat (SS type 304) = 477 J/kgK (Tab. 7)[1]
         # C_th = 0.01064 * 477
-        C_shell_val = 5.075 # J/K
+        C_shell_val = 5.075 
     end
     
-    # Instantiate nodes/masses
+    # Instantiate nodes
     @named core_cap = TemperatureDependentJellyroll(T_start=T_start)
     @named shell_cap = HeatCapacitor(C=C_shell_val, T=T_start)
     
@@ -86,7 +110,7 @@ end
     @named heat_source = PrescribedHeatFlow()
     @named Q_volumetric_in = RealInput()
     
-    # Absolute outer surface of the cell (isothermal shell node)
+    # Absolute outer surface of cell
     @named port_shell = HeatPort()
     
     eqs = [
@@ -105,12 +129,11 @@ end
         connect(R_ax.port_b, port_shell),
         
         # Attach shell thermal mass to outer node 
-        # (this implicitly connects it to thermal ground)
+        # Implicitly connects it to thermal ground
         connect(port_shell, shell_cap.port)
     ]
     
     subsystems = [core_cap, shell_cap, R_rad, R_ax, heat_source, Q_volumetric_in, port_shell]
     
-    return ODESystem(eqs, t, [], [V_jellyroll, R_rad_val, R_ax_val, C_shell_val]; 
-                     name=name, systems=subsystems)
+    return ODESystem(eqs, t, [], [V_jellyroll, R_rad_val, R_ax_val, C_shell_val]; name=name, systems=subsystems)
 end

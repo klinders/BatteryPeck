@@ -10,6 +10,9 @@ using Plots
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 using Plots.Measures
+using CSV
+using DataInterpolations
+using DataFrames
 
 # Import module
 using Revise
@@ -20,10 +23,18 @@ Revise.revise()
 # Load parameters
 p = Chen2020()
 
-# Set initial states
-p.n.c₀ = p.n.z_0 * p.n.c₊  # Empty negative electrode
-p.p.c₀ = p.p.z_0 * p.p.c₊  # Fill positive electrode
-p.Vmin = 2.4 # Lower event limit to prevent instant solver termination
+# Read voltage to state of charge look up table for initialisation
+lut_file = joinpath(@__DIR__, "..", "data", "Chen2020", "soc_ocv_lut.csv")
+lut = CSV.read(lut_file, DataFrame)
+v_to_soc_interp = LinearInterpolation(lut.SoC, lut.Voltage)
+soc_init = v_to_soc_interp(4.2)
+
+p.n.c₀ = (p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)) * p.n.c₊  
+p.p.c₀ = (p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)) * p.p.c₊
+
+# Loosen voltage constraints to prevent solver crashing at high rates
+p.Vmin = 1.0
+p.Vmax = 5.5
 
 # Build system
 @mtkbuild sys = SingleCellPack(params=p, config=(1,1))
@@ -33,17 +44,19 @@ exp = Experiment([
     RestStep(1),
     #PowerStep(30, 3600/1.5),
 
-    CurrentStep(-5 * 0.2, 3600/0.15), # Low rate charge
+    #CurrentStep(-5 * 0.2, 3600/0.15), # Low rate charge
     #CurrentStep(-5 * 0.5, 3600/0.45), 
     #CurrentStep(-5 * 1.0, 3600/1.0), 
     #CurrentStep(-5 * 1.5, 3600/1.5), 
     #CurrentStep(-5 * 2.0, 3600/2.0), 
+    #CurrentStep(-5 * 5.0, 3600/5.0), 
 
     #CurrentStep(5 * 0.2, 3600/0.15), # Low rate discharge
     #CurrentStep(5 * 0.5, 3600/0.45), 
     #CurrentStep(5 * 1.0, 3600/1.0), 
     #CurrentStep(5 * 1.5, 3600/1.5), 
     #CurrentStep(5 * 2.0, 3600/2.0), 
+    CurrentStep(5 * 5.0, 3600/5.0), 
     RestStep(60),
 ])
 
@@ -73,9 +86,7 @@ else
     q_film = sol[sys.cell.Qf]
     q_total = sol[sys.cell.Q_total]
 
-    # ---------------------------------------------------------
     # Bar chart data processing
-    # ---------------------------------------------------------
     N = length(t)
     # Create bin edges to make equal sections across array length
     bin_edges = round.(Int, range(1, stop=N, length=6))
@@ -111,10 +122,6 @@ else
         t_end = round(Int, t[idx_end])
         push!(labels_bar, "$(t_start)s-\n$(t_end)s")
     end
-
-    # ---------------------------------------------------------
-    # Plotting code
-    # ---------------------------------------------------------
     
     # Time limits
     xlim_range = (t[1], t[end]) 
@@ -125,7 +132,7 @@ else
     # Colour scheme
     matlab_colors = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30", "#4DBEEE", "#A2142F"]
 
-    # Heat sources versus time
+    # Heat sources versus time plot
     p_heat = plot(t, q_rev, label="Reversible", ylabel="Volumetric heat (W/m³)", 
                   title="Heat generation sources", 
                   lw=2, legend=:bottomright, xlims=xlim_range, 
@@ -137,9 +144,7 @@ else
     plot!(p_heat, t, q_film, label="Film", lw=2, color=matlab_colors[5])
     plot!(p_heat, t, q_total, label="Total", lw=2, linestyle=:dash, color=:black)
 
-    # ---------------------------------------------------------
-    # Voltage and current versus time
-    # ---------------------------------------------------------
+    # Voltage and current versus time plot
     p_volt_curr = plot(t, v, label="Voltage", ylabel="Voltage (V)", lw=2, color=matlab_colors[1], 
                        legend=:bottomright, xlims=xlim_range,
                        left_margin=m, right_margin=m, top_margin=0mm, bottom_margin=0mm)
@@ -163,16 +168,12 @@ else
     plot!(p_twin, [NaN], [NaN], label="Voltage", color=:transparent)
     plot!(p_twin, [NaN], [NaN], label="Current", color=:transparent)
 
-    # ---------------------------------------------------------
-    # Power versus time
-    # ---------------------------------------------------------
+    # Power versus time plot
     p_pow = plot(t, pack_power, label="Power", xlabel="Time (s)", ylabel="Power (W)", lw=2, 
                  color=matlab_colors[4], legend=:bottomright, xlims=xlim_range, 
                  left_margin=m, right_margin=m, top_margin=0mm, bottom_margin=m)
 
-    # ---------------------------------------------------------
     # Stacked bar chart
-    # ---------------------------------------------------------
     stack_5 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar .+ q_f_bar 
     stack_4 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar
     stack_3 = q_rev_bar .+ q_irr_bar .+ q_e_bar
