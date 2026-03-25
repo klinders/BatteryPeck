@@ -12,9 +12,13 @@ export get_coolant_properties, get_solid_properties
 Contains constant thermophysical properties for single-phase coolant fluid.
 """
 Base.@kwdef struct FluidProperties
+    # Define fluid density
     density::Float64
+    # Define specific heat capacity
     specific_heat::Float64
+    # Define thermal conductivity
     thermal_conductivity::Float64
+    # Define dynamic viscosity
     dynamic_viscosity::Float64
 end
 
@@ -24,8 +28,11 @@ end
 Contains constant thermophysical properties for solid pack materials.
 """
 Base.@kwdef struct SolidProperties
+    # Define solid density
     density::Float64
+    # Define specific heat capacity
     specific_heat::Float64
+    # Define thermal conductivity
     thermal_conductivity::Float64
 end
 
@@ -35,9 +42,13 @@ end
 Contains cross-sectional dimensions of cooling ribbon for hydraulic calculations.
 """
 Base.@kwdef struct TMSGeometry
+    # Set internal channel width
     channel_width::Float64
+    # Set internal channel height
     channel_height::Float64
+    # Define quantity of parallel flow channels
     number_of_channels::Int
+    # Set thickness of enclosing pipe wall
     wall_thickness::Float64
 end
 
@@ -47,19 +58,31 @@ end
 Master dictionary containing environmental boundaries, geometries, and materials.
 """
 Base.@kwdef struct PackParameters
+    # Assign fluid properties
     fluid::FluidProperties
+    # Assign pipe wall properties
     pipe_wall::SolidProperties
+    # Assign thermal potting properties
     potting_material::SolidProperties
+    # Assign outer casing properties
     casing_material::SolidProperties
+    # Assign cooling channel dimensions
     tms_geometry::TMSGeometry
     
+    # Set physical gap between adjacent cells
     cell_gap_thickness::Float64
+    # Set thickness of potting material at cell base
     axial_potting_thickness::Float64
+    # Set thickness of outer pack casing
     casing_thickness::Float64
     
+    # Set ambient environmental temperature
     ambient_temperature::Float64
+    # Set coolant inlet temperature
     inlet_temperature::Float64
+    # Set total coolant mass flow rate
     mass_flow_rate::Float64
+    # Set convective heat transfer coefficient for outer casing
     ambient_convection_coefficient::Float64
 end
 
@@ -95,6 +118,7 @@ function get_coolant_properties(coolant_type::Symbol)
             thermal_conductivity = 0.61,
             dynamic_viscosity = 0.002 
         )
+    # Handle unsupported coolant types
     else
         error("Unknown coolant type. Choose :water_glycol or :air.")
     end
@@ -129,6 +153,7 @@ function get_solid_properties(material_type::Symbol)
             specific_heat = 900.0,
             thermal_conductivity = 238.0
         )
+    # Handle unsupported material types
     else
         error("Unknown material type. Choose :aluminium_6061 or :bergquist_tgf_1500.")
     end
@@ -157,6 +182,7 @@ function build_pack_parameters(;
     )
     
     # Typical multi-port extruded aluminium cooling ribbon
+    # Define baseline cooling channel geometry
     tms_geom = TMSGeometry(
         channel_width = 0.018,
         channel_height = 0.002,
@@ -164,6 +190,7 @@ function build_pack_parameters(;
         wall_thickness = 0.001
     )
     
+    # Construct and return master parameter set
     return PackParameters(
         fluid = get_coolant_properties(coolant),
         pipe_wall = get_solid_properties(:aluminium_6061),
