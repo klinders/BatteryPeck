@@ -146,11 +146,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.ϕₛn.u ~ ϕ̄ₙ,
         el.Δϕₙ.u ~ ne.U₀ + ηᵣn - sei.ϕf_x,
 
-        pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
-        ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
+        ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/aₙ, # Current density in the negative electrode
+        pe.J.u ~  -i_app/params.e.Lₚ/aₚ, # Current density in the positive electrode
         
         aₙ ~ 3*(1-el.ϵ̄ₙ)/params.n.Rₖ,
-        aₚ ~ params.p.aₖ,#3*(1-el.ϵ̄ₚ)/params.p.Rₖ,
+        aₚ ~ params.p.aₖ,
+
         # # Ne sei reaction
         sei.J.u ~ ne.J.u, # Current density for SEI side reaction
         sei.T.u ~ T.u,
@@ -163,7 +164,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         plating.aₖ.u ~ aₙ,
         [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
         plating.η_sei.u ~ sei.ϕf,
-        [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
+        [plating.cₑ.u[i] ~ params.e.cₜ for i in 1:Nn]...,
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,

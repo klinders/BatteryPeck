@@ -22,7 +22,7 @@ function SEIGrowth(; name, p::SideReactionParameters, s::SolidParticleParameters
     
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = scale
+        (c_sei(t))[1:N] = 0#scale
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -40,10 +40,10 @@ function SEIGrowth(; name, p::SideReactionParameters, s::SolidParticleParameters
         # Exchange current density
         [j_sei[i] ~ -p.j_sei₀*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]...,
 
-        [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]..., 
+        [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
-        [ϕf[i] ~ -J.u*L_sei[i]/aₖ.u*p.R for i in 1:N]...,
+        [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,

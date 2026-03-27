@@ -23,13 +23,15 @@ function LithiumPlating(; name, p::SideReactionParameters, s::SolidParticleParam
     scale = 1000 # c_typical
     α_plating = 0.65 # Li plating transfer coefficient
     α_stripping = 1 - α_plating
-    k_plating = 1e-11
+    k_plating = 1e-9
+
+    j_strip0 = F*k_plating*1000
 
     @variables begin
         # Plating concentration
         (c_plating(t))[1:N] = 0
         (c_dead(t))[1:N] = 0
-        (j_stripping(t))[1:N]
+        (j_stripping(t))[1:N], [guess=j_strip0]
         (ϕf(t))[1:N]
 
         c_plating_x(t)
@@ -42,12 +44,12 @@ function LithiumPlating(; name, p::SideReactionParameters, s::SolidParticleParam
     η_plating = -η_stripping
 
     j0_stripping = F*k_plating .*c_plating
-    j0_plating = F*k_plating .*cₑ.u
+    j0_plating = [F*k_plating*cₑ.u[i] for i in 1:N]
     
     eqns = [
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        [j_stripping[i] ~ -j0_plating[i]*exp(α_plating*F/R/T.u*η_plating[i]) for i in 1:N]...,
+        [j_stripping[i] ~ 0 for i in 1:N]...,#-j0_plating[i]*exp(α_plating*F/R/T.u*η_plating[i])
         
         # Irreversable
         [Dt(c_dead[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,

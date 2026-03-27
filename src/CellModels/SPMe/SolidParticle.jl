@@ -43,7 +43,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         [Dt(c[i]) ~ (Dᵣ[i]*Aᵣ[i]*(c[i+1] - c[i])/Δr - Dₗ[i]*Aₗ[i]*(c[i] - c[i-1])/Δr)/Vᵢ[i] for i in 2:g.Nᵣ-1]...
 
         # Boundary condition edge
-        Dt(c[end]) ~ (-Aᵣ[end]*J.u/F/p.aₖ - Dₗ[end]*Aₗ[end]*(c[end] - c[end-1])/Δr)/Vᵢ[end]
+        Dt(c[end]) ~ (-Aᵣ[end]*J.u/F - Dₗ[end]*Aₗ[end]*(c[end] - c[end-1])/Δr)/Vᵢ[end]
 
     ]
 
