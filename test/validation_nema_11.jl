@@ -14,8 +14,8 @@
 #    mathematically requires using standard water properties (~0.00089 Pa.s).
 #
 # 3. 1D Minor Losses: To match the 3D CFD's quadratic (v^2) pressure drop curve, 
-#    a minor loss coefficient (K ≈ 33.0 per meter) must be added to the 1D LPTN 
-#    to account for form drag caused by the 180-degree serpentine bends.
+#    a distributed minor loss coefficient (K ≈ 33.0 per metre) is included
+#    within the FluidNode to account for form drag in the serpentine bends.
 #
 # 4. Fluid Gap Geometry: To prevent linear viscous friction from severely 
 #    overestimating pressure drop, the hydraulic diameter must be calculated 
@@ -75,10 +75,6 @@ v_val_W_50, W_val_50   = load_and_preprocess(joinpath(data_dir, "11b_PumpPower.c
     build_hydraulic_system(name::Symbol, geom, params::PackParameters)
 
 Constructs isothermal 1D fluid network to evaluate pressure drop across serpentine channels.
-Includes minor loss components to account for form drag in bends.
-
-Editable values:
-`K_per_metre`: Adjusts form drag multiplier for serpentine bends. Directly affects quadratic pressure drop curve.
 """
 function build_hydraulic_system(name::Symbol, geom, params::PackParameters)
     # Count total fluid nodes
@@ -101,35 +97,13 @@ function build_hydraulic_system(name::Symbol, geom, params::PackParameters)
     # Initialise array of fluid nodes
     tms_nodes = [TMSNode(name=Symbol("tms_$i"), params=params, length=node_length) for i in 1:num_tms_nodes]
     
-    # Define form drag coefficient per metre
-    K_per_metre = 33.0
-    # Initialise array for minor loss components
-    minor_losses = []
-    
-    # Iterate through flow edges to create minor loss nodes
-    for (idx, edge) in enumerate(geom.flow_edges)
-        t1, t2 = edge
-        c1 = geom.tms_coords[t1]
-        c2 = geom.tms_coords[t2]
-        
-        # Calculate distance between adjacent fluid nodes
-        dist = sqrt((c1[1] - c2[1])^2 + (c1[2] - c2[2])^2)
-        
-        # Calculate discrete minor loss for current segment
-        node_K = K_per_metre * dist
-        
-        # Append minor loss component to array
-        push!(minor_losses, MinorLoss(name=Symbol("bend_$idx"), params=params, K_val=node_K))
-    end
-    
     # Initialise array for system equations
     eqs = Equation[]
     
-    # Connect fluid nodes and minor losses in series
-    for (idx, edge) in enumerate(geom.flow_edges)
+    # Connect fluid nodes directly in series
+    for edge in geom.flow_edges
         t1, t2 = edge
-        push!(eqs, connect(tms_nodes[t1].port_b, minor_losses[idx].port_a))
-        push!(eqs, connect(minor_losses[idx].port_b, tms_nodes[t2].port_a))
+        push!(eqs, connect(tms_nodes[t1].port_b, tms_nodes[t2].port_a))
     end
     
     # Identify inlet fluid node
@@ -147,14 +121,14 @@ function build_hydraulic_system(name::Symbol, geom, params::PackParameters)
     push!(eqs, connect(last_tms.port_b, fluid_outlet.port))
     
     # Aggregate all hydraulic components
-    all_systems = vcat(tms_nodes, minor_losses, [fluid_inlet, fluid_outlet])
+    all_systems = vcat(tms_nodes, [fluid_inlet, fluid_outlet])
     
     # Return complete hydraulic ODE system
     return ODESystem(eqs, t, [], []; systems=all_systems, name=name)
 end
 
 """
-    run_hydraulics(channel_width, velocities)
+    run_hydraulics(channel_height, velocities)
 
 Simulates pressure drop and calculates pump power for various inlet velocities.
 
@@ -165,10 +139,10 @@ Pump power: W = Q * ΔP = (m_dot / ρ) * ΔP
 Editable values:
 `velocities`: Array defining fluid simulation speeds.
 """
-function run_hydraulics(channel_width, velocities)
+function run_hydraulics(channel_height, velocities)
     
-    # Set physical channel height
-    channel_height = 0.004 
+    # Set physical channel width
+    channel_width = 0.004 
     # Calculate cross sectional area
     A_cross = channel_width * channel_height
     # Define fluid density
@@ -270,20 +244,20 @@ results_W = Dict()
 # Initialise dictionary for corrected power outputs
 results_W_corrected = Dict()
 
-# Iterate through target channel widths
-for w in [0.040, 0.050]
+# Iterate through target channel heights
+for h in [0.040, 0.050]
     # Print simulation status to console
-    println("Running hydraulics for width = $(w*1000) mm...")
+    println("Running hydraulics for height = $(h*1000) mm...")
     
     # Execute hydraulic simulation
-    dp, w_p, w_c = run_hydraulics(w, velocities)
+    dp, w_p, w_c = run_hydraulics(h, velocities)
     
     # Store pressure drop results
-    results_dp[w] = dp
+    results_dp[h] = dp
     # Store raw power results
-    results_W[w] = w_p
+    results_W[h] = w_p
     # Store corrected power results
-    results_W_corrected[w] = w_c
+    results_W_corrected[h] = w_c
 end
 
 # Initialise plot for 40mm pressure drop

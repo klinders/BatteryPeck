@@ -133,9 +133,9 @@ end
 @register_symbolic q_gen_5c(t)
 
 # Define channel width
-W_channel = 0.004 
+W_channel = 0.050 
 # Define channel height
-H_channel = 0.050 
+H_channel = 0.004 
 # Calculate cross sectional area
 A_cross = W_channel * H_channel
 # Define fluid density

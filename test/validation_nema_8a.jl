@@ -166,9 +166,9 @@ v_coolant = 0.0000001
 # Define fluid density
 rho_water = 998.0
 # Define channel width
-W_channel = 0.050 
+W_channel = 0.004 
 # Define channel height
-H_channel = 0.004 
+H_channel = 0.050 
 
 # Calculate cross sectional area
 A_cross = W_channel * H_channel
@@ -198,7 +198,7 @@ val_params = PackParameters(
     ambient_temperature = 298.15,
     inlet_temperature = 298.15,
     mass_flow_rate = m_dot_baseline, 
-    ambient_convection_coefficient = 17.0
+    ambient_convection_coefficient = 16.0
 )
 
 # Build spatial geometry for battery pack

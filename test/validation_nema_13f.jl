@@ -145,9 +145,9 @@ v_coolant = 0.3
 # Define fluid density
 rho_water = 998.0
 # Define channel width
-W_channel = 0.050 
+W_channel = 0.004 
 # Define channel height
-H_channel = 0.004 
+H_channel = 0.050 
 # Calculate cross sectional area
 A_cross = W_channel * H_channel
 # Calculate baseline mass flow rate

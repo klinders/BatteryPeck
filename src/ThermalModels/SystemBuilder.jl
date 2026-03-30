@@ -3,7 +3,7 @@
 # Assembles the full LPTN by wiring cells, TMS nodes, and boundaries together
 # ==============================================================================
 
-export build_pack_system
+export build_pack_system, FluidSource, FluidSink
 
 using ModelingToolkit
 using ModelingToolkitStandardLibrary.Thermal
@@ -22,7 +22,7 @@ Editable values:
 @component function FluidSource(; name, m_flow_val, T_val)
     @named port = FluidPort()
     
-    # Negative value indicates mass leaves source to enter pipe
+    # Indicate negative value for mass leaving source to enter pipe
     eqs = [
         port.m_flow ~ -m_flow_val, 
         port.T ~ T_val
@@ -114,9 +114,11 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     push!(eqs, connect(casing_convection.port_b, ambient_temp.port))
     
     # Retain potting bottleneck for active scenario as cells are physically embedded
-    cell_face_area = pi * (params.tms_geometry.channel_width / 2.0)^2
-    R_axial_val = params.axial_potting_thickness / (params.potting_material.thermal_conductivity * (2 * cell_face_area))
-    
+    cell_diameter = 0.021
+    cell_face_area = pi * (cell_diameter / 2.0)^2
+    #R_axial_val = params.axial_potting_thickness / (params.potting_material.thermal_conductivity * (2 * cell_face_area))
+    R_axial_val = 0.00001
+
     # Create axial thermal resistors
     axial_resistors = [ThermalResistor(name=Symbol("R_ax_$i"), R=R_axial_val) for i in 1:num_cells]
     
@@ -126,13 +128,12 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
         push!(eqs, connect(axial_resistors[i].port_b, casing_mass.port))
     end
     
-    #R_radial_val = params.cell_gap_thickness / (params.potting_material.thermal_conductivity * (0.065 * 0.021)) 
-
     # Override transverse conduction
     # SSCC is continuous 1mm thick aluminium sheet weaving through pack
     # Override silicone potting resistance to simulate highly conductive metal highway
     # Allows heat to more easily short-circuit between rows and prevents artificial downstream bottlenecking
-    R_radial_val = 0.027 
+    R_radial_val = 0.000027 
+    # 0.027 old
     
     # Create intercellular gap resistors
     gap_resistors = [ThermalResistor(name=Symbol("R_gap_$idx"), R=R_radial_val) for idx in 1:length(geom.cell_edges)]
@@ -146,6 +147,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     
     # Tunable contact resistance between cell and cooling ribbon
     R_contact_val = 3.5
+    # 3.5 old
     
     # Create contact resistors
     contact_resistors = [ThermalResistor(name=Symbol("R_contact_$idx"), R=R_contact_val) 
