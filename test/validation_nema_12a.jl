@@ -134,7 +134,7 @@ end
 @register_symbolic q_gen_5c(t)
 
 # Define channel width
-W_channel = 0.004 
+W_channel = 0.002
 # Define fluid density
 rho_water = 998.0
 
@@ -208,12 +208,12 @@ function run_figure_12a_validation(t_hg_end)
             
             cell_gap_thickness = (0.025 - 0.021) / 2.0, 
             axial_potting_thickness = 0.005,
-            casing_thickness = 0.003,
+            casing_thickness = 0.01,
             
             ambient_temperature = 298.15,
             inlet_temperature = 298.15,
             mass_flow_rate = m_dot_current, 
-            ambient_convection_coefficient = 17.0 
+            ambient_convection_coefficient = 5
         )
         
         # Construct and simplify ODE system while suppressing console warnings

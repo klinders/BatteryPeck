@@ -135,7 +135,7 @@ end
 # Define channel width
 W_channel = 0.050 
 # Define channel height
-H_channel = 0.004 
+H_channel = 0.002
 # Calculate cross sectional area
 A_cross = W_channel * H_channel
 # Define fluid density
@@ -205,12 +205,12 @@ function run_velocity_validation(t_hg_end)
             
             cell_gap_thickness = (0.025 - 0.021) / 2.0, 
             axial_potting_thickness = 0.005,
-            casing_thickness = 0.003,
+            casing_thickness = 0.01,
             
             ambient_temperature = 298.15,
             inlet_temperature = 298.15,
             mass_flow_rate = m_dot_current, 
-            ambient_convection_coefficient = 17.0 
+            ambient_convection_coefficient = 5.0 
         )
         
         # Construct and simplify ODE system while suppressing console warnings

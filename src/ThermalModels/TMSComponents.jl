@@ -1,6 +1,7 @@
 # ==============================================================================
 # TMSComponents.jl
 # 1D fluid and pipe wall elements using MTK
+# Reference: Kakac, S., Shah, R.K. and Aung, W., 1987. Handbook of single-phase convective heat transfer. Wiley.
 # ==============================================================================
 
 export FluidPort, PipeWallNode, FluidNode, ConvectionModel, MinorLoss, TMSNode
@@ -38,7 +39,8 @@ Equations:
 Heat capacity dynamics: m * c_p * dT/dt = Q_in + Q_out
 
 Editable values:
-`T(t)`: Initial temperature of wall. Alters starting boundary condition.
+`T(t)`: Initial temperature of wall.
+Alters starting boundary condition.
 """
 @component function PipeWallNode(; name, params::PackParameters, length::Float64)
     # Create external thermal ports
@@ -85,6 +87,9 @@ Fast compilation ensured by tracking fluid mass dynamics explicitly.
 Equations:
 Pressure drop (Darcy-Weisbach): Δp = f * (L / D_h) * (ρ * v² / 2)
 Advection dynamics: m * c_p * dT/dt = Q_conv + m_dot * c_p * (T_in - T_out)
+Curvature stabilisation (Kakac, p. 5.9): Re_crit = 2100 * (1 + 12 * (R_c / a)^-0.5)
+Laminar friction multiplier (Kakac, p. 5.7): f_c / f_s = 0.1125 * De^0.5 
+Turbulent friction (Kakac, p. 5.22): f_c * (R_c / a)^0.5 = 0.00725 + 0.076 * (Re * (R_c / a)^-2)^-0.25
 
 Editable values:
 `T(t)`: Initial temperature of fluid. Alters starting thermal state.
@@ -101,7 +106,7 @@ Editable values:
     mu  = params.fluid.dynamic_viscosity
     k   = params.fluid.thermal_conductivity
     
-    # Extract channel geometry
+    # Extract physical channel geometry
     W = params.tms_geometry.channel_width
     H = params.tms_geometry.channel_height
     N = params.tms_geometry.number_of_channels
@@ -110,6 +115,12 @@ Editable values:
     A_flow = (W * H) * N
     P_wet = 2 * (W + H) * N
     D_h = 4 * A_flow / P_wet
+    
+    # Calculate hydraulic radius required for curved pipe correlations
+    a_hyd = D_h / 2.0 
+    
+    # Define radius of curvature for serpentine channel wrapping around cells with given pitch
+    R_c = 0.0125 
     
     # Compute total fluid mass
     fluid_mass = A_flow * length * rho
@@ -121,6 +132,10 @@ Editable values:
         m_flow(t) 
         v(t) 
         Re(t) 
+        De(t) 
+        Re_crit(t) 
+        f_curved_ratio(t) 
+        f_major(t) 
         dp(t) 
     end
     
@@ -130,16 +145,33 @@ Editable values:
         0 ~ port_a.m_flow + port_b.m_flow,
         m_flow ~ port_a.m_flow, 
         
-        # Calculate fluid velocity and Reynolds number
+        # Calculate fluid velocity and reynolds number
         v ~ m_flow / (rho * A_flow),
-        Re ~ (rho * v * D_h) / mu,
+        Re ~ (rho * max(v, 1e-6) * D_h) / mu,
         
-        # Calculate major and minor pressure losses
-        dp ~ IfElse.ifelse(Re < 2300, 
-                           (48.0 * mu * length / D_h^2) * v, 
-                           let f_turb = (0.79 * log(max(Re, 2300.0)) - 1.64)^-2
-                               f_turb * (length / D_h) * (rho * v^2 / 2.0)
-                           end) + (33.0 * length) * (rho * v^2 / 2.0),
+        # Calculate dean number
+        De ~ Re * sqrt(a_hyd / R_c),
+        
+        # Calculate delayed critical reynolds number due to curvature stabilisation
+        Re_crit ~ 2100.0 * (1.0 + 12.0 * (R_c / a_hyd)^-0.5),
+        
+        # Calculate laminar curved friction ratio using srinivasan correlation
+        f_curved_ratio ~ IfElse.ifelse(De < 30.0, 
+                            1.0, 
+                            IfElse.ifelse(De < 300.0, 
+                                0.419 * De^0.275, 
+                                0.1125 * sqrt(De)
+                            )
+                         ),
+                         
+        # Determine final darcy friction factor (1.0/Re instead of 64/Re for friciton adjustment at low speeds)
+        f_major ~ IfElse.ifelse(Re < Re_crit, 
+            (1.0 / Re) * f_curved_ratio,
+            4.0 * (sqrt(a_hyd / R_c) * (0.00725 + 0.076 * (Re * (a_hyd / R_c)^2)^-0.25))
+        ),
+        
+        # Calculate total pressure drop including major viscous loss and minor form drag (K = 42, minor friction factor)
+        dp ~ (f_major * (length / D_h) * (rho * v^2 / 2.0)) + ((42 * length) * (rho * v^2 / 2.0)),
                            
         # Apply pressure drop across ports
         port_a.p - port_b.p ~ dp,
@@ -186,7 +218,7 @@ Nu = ((f/8) * (Re - 1000) * Pr) / (1 + 12.7 * √(f/8) * (Pr^(2/3) - 1))
     P_wet = 2 * (W + H) * N
     D_h = 4 * A_flow / P_wet
     
-    # Calculate convective surface area and Prandtl number
+    # Calculate convective surface area and prandtl number
     A_surface = P_wet * length
     Pr = (cp * mu) / k
     
@@ -200,11 +232,11 @@ Nu = ((f/8) * (Re - 1000) * Pr) / (1 + 12.7 * √(f/8) * (Pr^(2/3) - 1))
     
     # Define heat transfer equations
     eqs = [
-        # Calculate Nusselt number for laminar or turbulent flow
+        # Calculate nusselt number for laminar or turbulent flow
         Nu ~ IfElse.ifelse(Re < 2300, 
                            8.23, 
                            let f_turb = (0.79 * log(max(Re, 2300.0)) - 1.64)^-2
-                               ((f_turb/8.0) * (Re - 1000.0) * Pr) / (1.0 + 12.7 * sqrt(f_turb/8.0) * (Pr^(2/3) - 1.0))
+                            ((f_turb/8.0) * (Re - 1000.0) * Pr) / (1.0 + 12.7 * sqrt(f_turb/8.0) * (Pr^(2/3) - 1.0))
                            end),
                            
         # Compute convective heat transfer coefficient
@@ -251,7 +283,7 @@ Container component coupling PipeWallNode, ConvectionModel, and FluidNode.
         connect(wall.fluid_port, convection.solid_port),
         connect(fluid.heat_port, convection.fluid_port),
         
-        # Pass Reynolds number to convection model
+        # Pass reynolds number to convection model
         convection.Re ~ fluid.Re
     ]
     

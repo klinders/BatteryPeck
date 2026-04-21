@@ -7,14 +7,15 @@
 # 1. Pump Power Typo: Nema reports pump power in mW (e.g., 19.6 mW at 0.5 m/s), 
 #    but raw hydraulic physics (W = Q * dP) based on their own reported pressure 
 #    drops yield a power exactly 10x higher (~196 mW). The paper contains a 
-#    post-processing decimal/unit conversion error.
+#    post-processing decimal/unit conversion error. We correct the validation 
+#    data directly by multiplying the CSV values by 10 to match physical reality.
 #
 # 2. Viscosity Mismatch: Nema Table 1 claims a dynamic viscosity of 0.002 Pa.s. 
 #    However, at low velocities (0.1 m/s), matching their 0.19 kPa pressure drop 
 #    mathematically requires using standard water properties (~0.00089 Pa.s).
 #
 # 3. 1D Minor Losses: To match the 3D CFD's quadratic (v^2) pressure drop curve, 
-#    a distributed minor loss coefficient (K ≈ 33.0 per metre) is included
+#    a distributed minor loss coefficient (K ≈ 42.0 per metre) is included
 #    within the FluidNode to account for form drag in the serpentine bends.
 #
 # 4. Fluid Gap Geometry: To prevent linear viscous friction from severely 
@@ -28,6 +29,7 @@ using DataInterpolations
 using DelimitedFiles
 using Plots
 using Logging
+using Statistics
 
 using Revise
 using BatteryToolkit
@@ -55,6 +57,34 @@ function load_and_preprocess(filepath)
     return raw_data[:, 1], raw_data[:, 2]
 end
 
+"""
+    calculate_metrics(x_sim, y_sim, x_val, y_val)
+
+Interpolates validation data to match simulation points and calculates RMSE and R².
+Uses clamping to safely prevent extrapolation errors outside validation bounds.
+"""
+function calculate_metrics(x_sim, y_sim, x_val, y_val)
+    # Create linear interpolation of validation data
+    interp = LinearInterpolation(y_val, x_val)
+    
+    # Clamp simulation x-coordinates to validation bounds to prevent extrapolation errors
+    x_min, x_max = minimum(x_val), maximum(x_val)
+    x_safe = clamp.(x_sim, x_min, x_max)
+    
+    # Evaluate validation data at simulation points
+    y_val_matched = interp.(x_safe)
+    
+    # Calculate Root Mean Square Error (RMSE)
+    rmse = sqrt(mean((y_sim .- y_val_matched).^2))
+    
+    # Calculate Coefficient of Determination (R²)
+    ss_res = sum((y_sim .- y_val_matched).^2)
+    ss_tot = sum((y_val_matched .- mean(y_val_matched)).^2)
+    r2 = ss_tot == 0.0 ? 0.0 : 1.0 - (ss_res / ss_tot)
+    
+    return rmse, r2
+end
+
 # Define path to data directory
 data_dir = joinpath(@__DIR__, "..", "data", "Nema2026")
 
@@ -62,11 +92,15 @@ data_dir = joinpath(@__DIR__, "..", "data", "Nema2026")
 v_val_dp_40, dp_val_40 = load_and_preprocess(joinpath(data_dir, "11a_PressureDrop.csv"))
 # Load pump power data for 40mm channel
 v_val_W_40, W_val_40   = load_and_preprocess(joinpath(data_dir, "11a_PumpPower.csv"))
+# Correct the 10x magnitude typo in the Nema power data
+W_val_40 .*= 10.0
 
 # Load pressure drop data for 50mm channel
 v_val_dp_50, dp_val_50 = load_and_preprocess(joinpath(data_dir, "11b_PressureDrop.csv"))
 # Load pump power data for 50mm channel
 v_val_W_50, W_val_50   = load_and_preprocess(joinpath(data_dir, "11b_PumpPower.csv"))
+# Correct the 10x magnitude typo in the Nema power data
+W_val_50 .*= 10.0
 
 # Declare independent time variable
 @parameters t
@@ -142,7 +176,7 @@ Editable values:
 function run_hydraulics(channel_height, velocities)
     
     # Set physical channel width
-    channel_width = 0.004 
+    channel_width = 0.002 
     # Calculate cross sectional area
     A_cross = channel_width * channel_height
     # Define fluid density
@@ -166,8 +200,6 @@ function run_hydraulics(channel_height, velocities)
     dp_results = Float64[]
     # Initialise array for raw power results
     power_results = Float64[]
-    # Initialise array for corrected power results
-    power_results_corrected = Float64[]
     
     # Iterate through target velocities
     for v in velocities
@@ -223,86 +255,98 @@ function run_hydraulics(channel_height, velocities)
         # Convert pump power to milliwatts
         W_mW = W_watts * 1000.0
         
-        # Append corrected power result
-        push!(power_results_corrected, W_mW)
-        
-        # Append raw power result with magnitude offset
-        push!(power_results, W_mW / 10.0) 
+        # Append raw power result
+        push!(power_results, W_mW) 
     end
     
     # Return all hydraulic results
-    return dp_results, power_results, power_results_corrected
+    return dp_results, power_results
 end
 
-# Define range of target velocities
-velocities = 0.1:0.05:0.5
+let
+    # Define range of target velocities
+    velocities = collect(0.1:0.1:0.5)
 
-# Initialise dictionary for pressure outputs
-results_dp = Dict()
-# Initialise dictionary for power outputs
-results_W = Dict()
-# Initialise dictionary for corrected power outputs
-results_W_corrected = Dict()
+    # Initialise dictionary for pressure outputs
+    results_dp = Dict{Float64, Vector{Float64}}()
+    # Initialise dictionary for power outputs
+    results_W = Dict{Float64, Vector{Float64}}()
 
-# Iterate through target channel heights
-for h in [0.040, 0.050]
-    # Print simulation status to console
-    println("Running hydraulics for height = $(h*1000) mm...")
-    
-    # Execute hydraulic simulation
-    dp, w_p, w_c = run_hydraulics(h, velocities)
-    
-    # Store pressure drop results
-    results_dp[h] = dp
-    # Store raw power results
-    results_W[h] = w_p
-    # Store corrected power results
-    results_W_corrected[h] = w_c
+    # Iterate through target channel heights
+    for h in [0.040, 0.050]
+        # Print simulation status to console
+        println("Running hydraulics for height = $(h*1000) mm...")
+        
+        # Execute hydraulic simulation
+        dp, w_p = run_hydraulics(h, velocities)
+        
+        # Store pressure drop results
+        results_dp[h] = dp
+        # Store raw power results
+        results_W[h] = w_p
+    end
+
+    # Calculate metrics and print to terminal
+    println("\n=== 40mm Channel Metrics ===")
+    rmse_dp40, r2_dp40 = calculate_metrics(velocities, results_dp[0.040], v_val_dp_40, dp_val_40)
+    println("Pressure Drop - RMSE: $(round(rmse_dp40, digits=4)) kPa, R²: $(round(r2_dp40, digits=4))")
+    rmse_W40, r2_W40 = calculate_metrics(velocities, results_W[0.040], v_val_W_40, W_val_40)
+    println("Pump Power    - RMSE: $(round(rmse_W40, digits=4)) mW, R²: $(round(r2_W40, digits=4))")
+
+    println("\n=== 50mm Channel Metrics ===")
+    rmse_dp50, r2_dp50 = calculate_metrics(velocities, results_dp[0.050], v_val_dp_50, dp_val_50)
+    println("Pressure Drop - RMSE: $(round(rmse_dp50, digits=4)) kPa, R²: $(round(r2_dp50, digits=4))")
+    rmse_W50, r2_W50 = calculate_metrics(velocities, results_W[0.050], v_val_W_50, W_val_50)
+    println("Pump Power    - RMSE: $(round(rmse_W50, digits=4)) mW, R²: $(round(r2_W50, digits=4))\n")
+
+    # Initialise plot for 40mm pressure drop
+    p1 = plot(
+        velocities, results_dp[0.040], label="LPTN (40mm)", 
+        color=:blue, linewidth=2, marker=:circle,
+        xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
+        title="Fig 11a: DP (Corrected CFD)", legend=:topleft, grid=true
+    )
+    # Overlay validation data for 40mm pressure drop
+    scatter!(p1, v_val_dp_40, dp_val_40, label="Nema CFD", color=:red, markersize=5)
+    # Annotate metrics
+    annotate!(p1, [(0.38, maximum(dp_val_40) * 0.15, text("RMSE: $(round(rmse_dp40, digits=3))\nR²: $(round(r2_dp40, digits=3))", 10, :left))])
+
+    # Initialise plot for 40mm pump power
+    p2 = plot(
+        velocities, results_W[0.040], label="LPTN (40mm)", 
+        color=:green, linewidth=2, marker=:circle,
+        xlabel="Velocity (m/s)", ylabel="Power (mW)",
+        title="Fig 11a: Pump Power", legend=:topleft, grid=true
+    )
+    # Overlay corrected validation data for 40mm power
+    scatter!(p2, v_val_W_40, W_val_40, label="Nema CFD (Corrected)", color=:red, markersize=5)
+    # Annotate metrics
+    annotate!(p2, [(0.38, maximum(W_val_40) * 0.15, text("RMSE: $(round(rmse_W40, digits=3))\nR²: $(round(r2_W40, digits=3))", 10, :left))])
+
+    # Initialise plot for 50mm pressure drop
+    p3 = plot(
+        velocities, results_dp[0.050], label="LPTN (50mm)", 
+        color=:blue, linewidth=2, marker=:circle,
+        xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
+        title="Fig 11b: DP (Flawed CFD)", legend=:topleft, grid=true
+    )
+    # Overlay validation data for 50mm pressure drop
+    scatter!(p3, v_val_dp_50, dp_val_50, label="Nema CFD", color=:red, markersize=5)
+    # Annotate metrics
+    annotate!(p3, [(0.38, maximum(dp_val_50) * 0.15, text("RMSE: $(round(rmse_dp50, digits=3))\nR²: $(round(r2_dp50, digits=3))", 10, :left))])
+
+    # Initialise plot for 50mm pump power
+    p4 = plot(
+        velocities, results_W[0.050], label="LPTN (50mm)", 
+        color=:green, linewidth=2, marker=:circle,
+        xlabel="Velocity (m/s)", ylabel="Power (mW)",
+        title="Fig 11b: Pump Power", legend=:topleft, grid=true
+    )
+    # Overlay corrected validation data for 50mm power
+    scatter!(p4, v_val_W_50, W_val_50, label="Nema CFD (Corrected)", color=:red, markersize=5)
+    # Annotate metrics
+    annotate!(p4, [(0.38, maximum(W_val_50) * 0.15, text("RMSE: $(round(rmse_W50, digits=3))\nR²: $(round(r2_W50, digits=3))", 10, :left))])
+
+    # Display combined plot layout
+    display(plot(p1, p2, p3, p4, layout=(2, 2), size=(1000, 800)))
 end
-
-# Initialise plot for 40mm pressure drop
-p1 = plot(
-    velocities, results_dp[0.040], label="LPTN (40mm)", 
-    color=:blue, linewidth=2, marker=:circle,
-    xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
-    title="Fig 11a: DP (Corrected CFD)", legend=:topleft, grid=true
-)
-# Overlay validation data for 40mm pressure drop
-scatter!(p1, v_val_dp_40, dp_val_40, label="Nema CFD", color=:red, markersize=5)
-
-# Initialise plot for 40mm pump power
-p2 = plot(
-    velocities, results_W[0.040], label="LPTN (40mm)", 
-    color=:green, linewidth=2, marker=:circle,
-    xlabel="Velocity (m/s)", ylabel="Power (mW)",
-    title="Fig 11a: Pump Power", legend=:topleft, grid=true
-)
-# Overlay erroneous validation data for 40mm power
-scatter!(p2, v_val_W_40, W_val_40, label="Nema CSV (Typo)", color=:orange, markersize=4)
-# Overlay corrected validation data for 40mm power
-scatter!(p2, velocities, results_W_corrected[0.040], label="CSV Corrected", color=:purple, markershape=:star5, markersize=6)
-
-# Initialise plot for 50mm pressure drop
-p3 = plot(
-    velocities, results_dp[0.050], label="LPTN (50mm)", 
-    color=:blue, linewidth=2, marker=:circle,
-    xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
-    title="Fig 11b: DP (Flawed CFD)", legend=:topleft, grid=true
-)
-# Overlay validation data for 50mm pressure drop
-scatter!(p3, v_val_dp_50, dp_val_50, label="Nema CFD", color=:red, markersize=5)
-
-# Initialise plot for 50mm pump power
-p4 = plot(
-    velocities, results_W[0.050], label="LPTN (50mm)", 
-    color=:green, linewidth=2, marker=:circle,
-    xlabel="Velocity (m/s)", ylabel="Power (mW)",
-    title="Fig 11b: Pump Power", legend=:topleft, grid=true
-)
-# Overlay erroneous validation data for 50mm power
-scatter!(p4, v_val_W_50, W_val_50, label="Nema CSV (Typo)", color=:orange, markersize=4)
-# Overlay corrected validation data for 50mm power
-scatter!(p4, velocities, results_W_corrected[0.050], label="CSV Corrected", color=:purple, markershape=:star5, markersize=6)
-
-# Display combined plot layout
-display(plot(p1, p2, p3, p4, layout=(2, 2), size=(1000, 800)))

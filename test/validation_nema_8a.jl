@@ -166,7 +166,7 @@ v_coolant = 0.0000001
 # Define fluid density
 rho_water = 998.0
 # Define channel width
-W_channel = 0.004 
+W_channel = 0.002 
 # Define channel height
 H_channel = 0.050 
 
@@ -193,12 +193,12 @@ val_params = PackParameters(
     
     cell_gap_thickness = (0.025 - 0.021) / 2.0, 
     axial_potting_thickness = 0.005,
-    casing_thickness = 0.003,
+    casing_thickness = 0.01, # 0.003 old
     
     ambient_temperature = 298.15,
     inlet_temperature = 298.15,
     mass_flow_rate = m_dot_baseline, 
-    ambient_convection_coefficient = 16.0
+    ambient_convection_coefficient = 5
 )
 
 # Build spatial geometry for battery pack

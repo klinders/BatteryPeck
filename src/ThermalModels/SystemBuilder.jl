@@ -117,7 +117,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     cell_diameter = 0.021
     cell_face_area = pi * (cell_diameter / 2.0)^2
     #R_axial_val = params.axial_potting_thickness / (params.potting_material.thermal_conductivity * (2 * cell_face_area))
-    R_axial_val = 0.00001
+    R_axial_val = 0.25
 
     # Create axial thermal resistors
     axial_resistors = [ThermalResistor(name=Symbol("R_ax_$i"), R=R_axial_val) for i in 1:num_cells]
@@ -132,7 +132,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     # SSCC is continuous 1mm thick aluminium sheet weaving through pack
     # Override silicone potting resistance to simulate highly conductive metal highway
     # Allows heat to more easily short-circuit between rows and prevents artificial downstream bottlenecking
-    R_radial_val = 0.000027 
+    R_radial_val = 0.2
     # 0.027 old
     
     # Create intercellular gap resistors
@@ -146,7 +146,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     end
     
     # Tunable contact resistance between cell and cooling ribbon
-    R_contact_val = 3.5
+    R_contact_val = 4
     # 3.5 old
     
     # Create contact resistors
