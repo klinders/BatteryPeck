@@ -94,8 +94,8 @@ function validate_planella(target_crate="All")
 
         # Initialise plot subplots per temperature forcing left margin to prevent clipping
         m = 7mm
-        p_volt = plot(ylabel="Voltage (V)", legend=:bottomleft, margin=m, left_margin=15mm)
-        p_temp = plot(xlabel="Time (s)", ylabel="Temperature (°C)", legend=:topleft, margin=m, left_margin=15mm)
+        p_volt = plot(ylabel="Voltage (V)", legend=:bottomright, margin=m, left_margin=15mm)
+        p_temp = plot(xlabel="Time (s)", ylabel="Temperature (°C)", legend=:topright, margin=m, left_margin=15mm)
         
         # Select colour for current temperature group
         current_colour = temp_colours[temp_idx]
