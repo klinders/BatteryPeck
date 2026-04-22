@@ -294,4 +294,4 @@ end
 
 # Run validation sequence safely
 # Pass "0.5C", "1C", or "2C" to run a specific rate
-Base.invokelatest(validate_planella, "0.5C")
+Base.invokelatest(validate_planella, "2C")

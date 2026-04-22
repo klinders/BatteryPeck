@@ -31,7 +31,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     # Components
     @named i_app = RealInput()          # Electrolyte current density
-    @named T = RealInput()              # Temperature
+    @named T = RealInput(guess=298.15)              # Temperature
     @named Δϕₙ = RealInput(guess=0.0)
     @named ϕₛn = RealInput(guess=0.0)
 

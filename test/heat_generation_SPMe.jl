@@ -53,10 +53,10 @@ exp = Experiment([
 
     #CurrentStep(5 * 0.2, 3600/0.15), # Low rate discharge
     #CurrentStep(5 * 0.5, 3600/0.45), 
-    #CurrentStep(5 * 1.0, 3600/1.0), 
+    CurrentStep(5 * 1.0, 3600/1.0), 
     #CurrentStep(5 * 1.5, 3600/1.5), 
     #CurrentStep(5 * 2.0, 3600/2.0), 
-    CurrentStep(5 * 5.0, 3600/5.0), 
+    #CurrentStep(5 * 5.0, 3600/5.0), 
     RestStep(60),
 ])
 
@@ -84,6 +84,8 @@ else
     q_ohm_e = sol[sys.cell.el.Qₑ]
     q_ohm_s = sol[sys.cell.Qₛ]
     q_film = sol[sys.cell.Qf]
+    q_sei = sol[sys.cell.Q_sei]
+    q_plating = sol[sys.cell.Q_plating]
     q_total = sol[sys.cell.Q_total]
 
     # Bar chart data processing
@@ -93,29 +95,34 @@ else
     
     labels_bar = String[]
     q_rev_bar = zeros(5); q_irr_bar = zeros(5); q_e_bar = zeros(5)
-    q_s_bar = zeros(5); q_f_bar = zeros(5)
+    q_s_bar = zeros(5); q_f_bar = zeros(5); q_sei_bar = zeros(5)
+    q_plating_bar = zeros(5)
     
     for i in 1:5
         idx_start = bin_edges[i]
         idx_end = bin_edges[i+1]
         
         # Sum absolute values of heat
-        sum_rev = sum(abs.(q_rev[idx_start:idx_end]))
-        sum_irr = sum(abs.(q_irr[idx_start:idx_end]))
-        sum_e   = sum(abs.(q_ohm_e[idx_start:idx_end]))
-        sum_s   = sum(abs.(q_ohm_s[idx_start:idx_end]))
-        sum_f   = sum(abs.(q_film[idx_start:idx_end]))
+        sum_rev     = sum(abs.(q_rev[idx_start:idx_end]))
+        sum_irr     = sum(abs.(q_irr[idx_start:idx_end]))
+        sum_e       = sum(abs.(q_ohm_e[idx_start:idx_end]))
+        sum_s       = sum(abs.(q_ohm_s[idx_start:idx_end]))
+        sum_f       = sum(abs.(q_film[idx_start:idx_end]))
+        sum_sei     = sum(abs.(q_sei[idx_start:idx_end]))
+        sum_plating = sum(abs.(q_plating[idx_start:idx_end]))
         
         # Calculate total absolute heat and prevent division by zero during rest steps
-        total_abs = sum_rev + sum_irr + sum_e + sum_s + sum_f
+        total_abs = sum_rev + sum_irr + sum_e + sum_s + sum_f + sum_sei + sum_plating
         total_abs = total_abs > 0 ? total_abs : 1.0 
         
         # Convert to percentages
-        q_rev_bar[i] = 100 * sum_rev / total_abs
-        q_irr_bar[i] = 100 * sum_irr / total_abs
-        q_e_bar[i]   = 100 * sum_e / total_abs
-        q_s_bar[i]   = 100 * sum_s / total_abs
-        q_f_bar[i]   = 100 * sum_f / total_abs
+        q_rev_bar[i]     = 100 * sum_rev / total_abs
+        q_irr_bar[i]     = 100 * sum_irr / total_abs
+        q_e_bar[i]       = 100 * sum_e / total_abs
+        q_s_bar[i]       = 100 * sum_s / total_abs
+        q_f_bar[i]       = 100 * sum_f / total_abs
+        q_sei_bar[i]     = 100 * sum_sei / total_abs
+        q_plating_bar[i] = 100 * sum_plating / total_abs
         
         # Create axis time period labels
         t_start = round(Int, t[idx_start])
@@ -129,7 +136,7 @@ else
     # Margins
     m = 7mm
 
-    # Colour scheme
+    # Colour scheme (7 colors to match the 7 heat sources)
     matlab_colors = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30", "#4DBEEE", "#A2142F"]
 
     # Heat sources versus time plot
@@ -142,6 +149,8 @@ else
     plot!(p_heat, t, q_ohm_e, label="Electrolyte", lw=2, color=matlab_colors[3])
     plot!(p_heat, t, q_ohm_s, label="Solid phase", lw=2, color=matlab_colors[4])
     plot!(p_heat, t, q_film, label="Film", lw=2, color=matlab_colors[5])
+    plot!(p_heat, t, q_sei, label="SEI", lw=2, color=matlab_colors[6])
+    plot!(p_heat, t, q_plating, label="Plating", lw=2, color=matlab_colors[7])
     plot!(p_heat, t, q_total, label="Total", lw=2, linestyle=:dash, color=:black)
 
     # Voltage and current versus time plot
@@ -173,7 +182,9 @@ else
                  color=matlab_colors[4], legend=:bottomright, xlims=xlim_range, 
                  left_margin=m, right_margin=m, top_margin=0mm, bottom_margin=m)
 
-    # Stacked bar chart
+    # Stacked bar chart calculations
+    stack_7 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar .+ q_f_bar .+ q_sei_bar .+ q_plating_bar
+    stack_6 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar .+ q_f_bar .+ q_sei_bar
     stack_5 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar .+ q_f_bar 
     stack_4 = q_rev_bar .+ q_irr_bar .+ q_e_bar .+ q_s_bar
     stack_3 = q_rev_bar .+ q_irr_bar .+ q_e_bar
@@ -183,6 +194,9 @@ else
     p_bar = plot(title="Absolute contribution heat sources", ylabel="Percentage (%)", 
                  xlabel="Time period", legend=:outertopright, margin=m)
     
+    # Plot bars in reverse order so they stack correctly
+    bar!(p_bar, labels_bar, stack_7, label="Plating", color=matlab_colors[7], lw=0)
+    bar!(p_bar, labels_bar, stack_6, label="SEI", color=matlab_colors[6], lw=0)
     bar!(p_bar, labels_bar, stack_5, label="Film", color=matlab_colors[5], lw=0)
     bar!(p_bar, labels_bar, stack_4, label="Solid phase", color=matlab_colors[4], lw=0)
     bar!(p_bar, labels_bar, stack_3, label="Electrolyte", color=matlab_colors[3], lw=0)

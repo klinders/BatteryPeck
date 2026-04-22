@@ -13,7 +13,7 @@
 using ModelingToolkit, OrdinaryDiffEq
 
 # Base method compiles ODE problem every time for ease of use
-function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-4, abstol=1e-7, kwargs...)
+function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, kwargs...)
     
     # Convert symbolic ODE expressions into static code using new power and current variables
     prob = ODEProblem(sys, [sys.Pin=>experiment.p0, sys.Iin=>0.0], (0.0,experiment.tend))
@@ -23,7 +23,7 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
 end
 
 # Fast method accepts pre-compiled ODE problem to bypass compilation overhead during benchmarks or repeated runs
-function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-4, abstol=1e-7, kwargs...)
+function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, kwargs...)
     
     # Stop simulation between every step when inputs are modified between experiment stages
     integrator = init(prob, alg; tstops=experiment.tstops, save_everystep=false, reltol=reltol, abstol=abstol, kwargs...)

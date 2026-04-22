@@ -20,6 +20,9 @@ using BatteryToolkit
 
 Revise.revise()
 
+# Set toggle to isolate and simulate R to D to R segments sequentially
+simulate_segments_only = true
+
 # Load experimental data
 data_file = joinpath(@__DIR__, "..", "data", "Chen2020", "LGM50_cell03.csv")
 
@@ -55,190 +58,265 @@ for j in eachindex(raw_i_exp)
     end
 end
 
-# Identify segments
-starts = Int[]
-ends = Int[]
-
-# Find start indices where mode changes from rest to discharge starting at final rest step
-for i in 2:nrow(df)
-    if strip(String(md_exp[i-1])) == "R" && strip(String(md_exp[i])) == "D"
-        push!(starts, i - 1)
-    end
-end
-
-# Find corresponding end indices where mode changes from rest to charge
-for s in starts
-    e = s
-    while e < nrow(df)
-        if strip(String(md_exp[e])) == "R" && strip(String(md_exp[e+1])) == "C"
-            push!(ends, e)
-            break
+# Extract isolated R to D to R segments from dataframe
+function extract_discharge_segments(df)
+    segments = DataFrame[]
+    n = nrow(df)
+    
+    i = 1
+    while i <= n
+        if strip(df.Md[i]) == "D"
+            # Find start of preceding R block
+            start_idx = i
+            while start_idx > 1 && strip(df.Md[start_idx - 1]) == "R"
+                start_idx -= 1
+            end
+            
+            # Find end of D block
+            end_idx = i
+            while end_idx < n && strip(df.Md[end_idx + 1]) == "D"
+                end_idx += 1
+            end
+            
+            # Find end of succeeding R block
+            while end_idx < n && strip(df.Md[end_idx + 1]) == "R"
+                end_idx += 1
+            end
+            
+            push!(segments, df[start_idx:end_idx, :])
+            i = end_idx
         end
-        e += 1
-    end
-    # Safety catch if file ends without charging
-    if e == nrow(df) && length(ends) < length(starts)
-        push!(ends, e)
-    end
-end
-
-# Discard first segment
-starts = starts[2:end]
-ends = ends[2:end]
-
-# Mask experimental arrays with NaNs to create visual gaps
-v_exp_masked = fill(NaN, length(v_exp))
-T_surf_exp_masked = fill(NaN, length(T_surf_exp))
-T_chamber_exp_masked = fill(NaN, length(T_chamber_exp))
-i_exp_masked = fill(NaN, length(i_exp))
-
-for (s, e) in zip(starts, ends)
-    v_exp_masked[s:e] .= v_exp[s:e]
-    T_surf_exp_masked[s:e] .= T_surf_exp[s:e]
-    T_chamber_exp_masked[s:e] .= T_chamber_exp[s:e]
-    i_exp_masked[s:e] .= i_exp[s:e]
-end
-
-# Initialise simulation loop
-sim_results = []
-
-println("Running validation simulations across $(length(starts)) segments...\n")
-
-for (idx, (s, e)) in enumerate(zip(starts, ends))
-    # Extract segment data
-    t_seg = t_exp[s:e]
-    v_seg = v_exp[s:e]
-    T_surf_seg = T_surf_exp[s:e]
-    i_seg = i_exp[s:e]
-    T_chamber_seg = T_chamber_exp[s:e] .+ 273.15
-    
-    # Local time vector starting from zero for simulator
-    t_sim_input = t_seg .- t_seg[1]
-    
-    # Initialise SOC based on segment starting voltage
-    v_init = v_seg[1]
-    soc_init = v_to_soc_interp(v_init) 
-    
-    # Load parameter set
-    p = Chen2020()
-
-    # Map SOC to stoichiometries
-    z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
-    z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
-
-    # Set initial solid concentrations
-    p.n.c₀ = z_n_init * p.n.c₊  
-    p.p.c₀ = z_p_init * p.p.c₊
-
-    p.Vmin = 1.0
-    p.Vmax = 5.0
-
-    # Build coupled core shell system
-    @mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=19.5, T_ambient=T_amb_K)
-
-    # Format data for current drive step
-    raw_dt = diff(t_sim_input)
-    valid_indices = findall(x -> x > 0.0, raw_dt)
-    clean_dt = raw_dt[valid_indices]
-    clean_i = i_seg[valid_indices]
-    clean_T_amb = T_chamber_seg[valid_indices .+ 1]
-    
-    # Define experiment for specific segment using time and current arrays
-    exp_seg = Experiment([
-        CurrentDriveStep(Any[clean_dt, clean_i, clean_T_amb], t_sim_input[end])
-    ])
-
-    # Run simulation
-    local sol = with_logger(NullLogger()) do
-        simulate(sys, exp_seg; saveat=10.0, verbose=false)
+        i += 1
     end
     
-    # Extract simulation results and shift time back to global timeframe
-    t_sim_seg = sol.t .+ t_seg[1]
-    v_sim_seg = sol[sys.cell.v]
-    i_sim_seg = sol[sys.I]
-    T_shell_sim_seg = sol[sys.thermal.shell_cap.T] .- 273.15
+    # Ignore segments that do not start at full charge
+    filter!(seg -> seg[1, "Voltage [V]"] >= 4.1, segments)
     
-    # Interpolate for metrics calculation against experimental data points
-    v_sim_interp = LinearInterpolation(v_sim_seg, t_sim_seg)
-    T_shell_sim_interp = LinearInterpolation(T_shell_sim_seg, t_sim_seg)
-
-    t_seg_clamped = clamp.(t_seg, t_sim_seg[1], t_sim_seg[end])
-    v_sim_mapped = v_sim_interp.(t_seg_clamped)
-    T_sim_mapped = T_shell_sim_interp.(t_seg_clamped)
-
-    # Calculate RMSE
-    rmse_v = sqrt(mean((v_sim_mapped .- v_seg).^2))
-    rmse_T = sqrt(mean((T_sim_mapped .- T_surf_seg).^2))
-
-    # Calculate R squared
-    ss_res_v = sum((v_seg .- v_sim_mapped).^2)
-    ss_tot_v = sum((v_seg .- mean(v_seg)).^2)
-    r2_v = ss_tot_v == 0 ? 0.0 : 1.0 - (ss_res_v / ss_tot_v)
-
-    ss_res_T = sum((T_surf_seg .- T_sim_mapped).^2)
-    ss_tot_T = sum((T_surf_seg .- mean(T_surf_seg)).^2)
-    r2_T = ss_tot_T == 0 ? 0.0 : 1.0 - (ss_res_T / ss_tot_T)
-
-    # Print segment metrics
-    println("Segment $idx (starts at t = $(round(t_seg[1], digits=1))s):")
-    @printf("  Starting voltage | %.4f V\n", v_init)
-    @printf("  Voltage          | RMSE: %7.2f mV | R²: %.4f\n", rmse_v * 1000, r2_v)
-    @printf("  Temperature      | RMSE: %7.2f °C | R²: %.4f\n\n", rmse_T, r2_T)
-    
-    # Save for plotting overlay
-    push!(sim_results, (t_sim_seg, v_sim_seg, T_shell_sim_seg, i_sim_seg))
+    return segments
 end
 
-# Plot layout
+# Load parameter set
+p = Chen2020()
+
+p.Vmin = 1.0
+p.Vmax = 5.0
+
 m = 7mm
 xlim_range = (0, t_exp[end])
-colours = ["#0072BD", "#D95319", "#EDB120"]
+colours = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30", "#4DBEEE", "#A2142F"]
 
-# Plot voltage
-p_volt = plot(t_exp, v_exp_masked, label="Exp. voltage", ylabel="Voltage (V)", 
-              lw=2, color=:black, linestyle=:dash, legend=:bottomleft, margin=m, xlims=xlim_range)
-              
-# Highlight segment start points
-scatter!(p_volt, t_exp[starts], v_exp[starts], marker=:cross, color=:black, markersize=6, label="Experiment start")
+let
+    if !simulate_segments_only
+        # Initialise plot layouts with full CSV traces
+        p_volt = plot(t_exp, v_exp, label="Exp. voltage", ylabel="Voltage (V)", 
+                    lw=2, color=:black, linestyle=:dash, legend=:bottomleft, margin=m, xlims=xlim_range)
 
-# Overlay simulation results
-for (i, res) in enumerate(sim_results)
-    t_s, v_s, _, _ = res
-    lbl = i == 1 ? "Sim. voltage" : ""
-    plot!(p_volt, t_s, v_s, label=lbl, lw=2, color=colours[1])
+        p_temp = plot(t_exp, T_surf_exp, label="Exp. surface temp", ylabel="Temperature (°C)", 
+                    lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
+        plot!(p_temp, t_exp, T_chamber_exp, label="Exp. chamber temp", lw=2, color=:gray, linestyle=:dot)
+
+        p_curr = plot(t_exp, i_exp, label="Exp. current", xlabel="Time (s)", ylabel="Current (A)", 
+                    lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
+
+        # Local time vector starting from zero for simulator
+        t_sim_input = t_exp .- t_exp[1]
+
+        # Initialise SOC based on very first starting voltage
+        v_init = v_exp[1]
+        soc_init = v_to_soc_interp(v_init) 
+
+        # Map SOC to stoichiometries
+        z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
+        z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
+
+        # Set initial solid concentrations
+        p.n.c₀ = z_n_init * p.n.c₊  
+        p.p.c₀ = z_p_init * p.p.c₊
+
+        # Build coupled core shell system
+        @mtkbuild sys = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=19.5, T_ambient=T_amb_K)
+
+        # Format data for current drive step
+        raw_dt = diff(t_sim_input)
+        valid_indices = findall(x -> x > 0.0, raw_dt)
+        clean_dt = raw_dt[valid_indices]
+        clean_i = i_exp[valid_indices]
+        clean_T_amb = T_chamber_exp[valid_indices .+ 1] .+ 273.15
+
+        # Define experiment for entire dataset
+        exp_full = Experiment([
+            CurrentDriveStep(Any[clean_dt, clean_i, clean_T_amb], t_sim_input[end])
+        ])
+
+        println("Running continuous validation simulation...\n")
+
+        # Run simulation
+        sol = with_logger(NullLogger()) do
+            simulate(sys, exp_full; saveat=10.0, verbose=false)
+        end
+
+        # Extract simulation results and shift time back to global timeframe
+        t_sim = sol.t .+ t_exp[1]
+        v_sim = sol[sys.cell.v]
+        i_sim = sol[sys.I]
+        T_shell_sim = sol[sys.thermal.shell_cap.T] .- 273.15
+
+        # Interpolate for metrics calculation against experimental data points
+        v_sim_interp = LinearInterpolation(v_sim, t_sim)
+        T_shell_sim_interp = LinearInterpolation(T_shell_sim, t_sim)
+
+        t_clamped = clamp.(t_exp, t_sim[1], t_sim[end])
+        v_sim_mapped = v_sim_interp.(t_clamped)
+        T_sim_mapped = T_shell_sim_interp.(t_clamped)
+
+        # Calculate RMSE
+        rmse_v = sqrt(mean((v_sim_mapped .- v_exp).^2))
+        rmse_T = sqrt(mean((T_sim_mapped .- T_surf_exp).^2))
+
+        # Calculate R squared
+        ss_res_v = sum((v_exp .- v_sim_mapped).^2)
+        ss_tot_v = sum((v_exp .- mean(v_exp)).^2)
+        r2_v = ss_tot_v == 0 ? 0.0 : 1.0 - (ss_res_v / ss_tot_v)
+
+        ss_res_T = sum((T_surf_exp .- T_sim_mapped).^2)
+        ss_tot_T = sum((T_surf_exp .- mean(T_surf_exp)).^2)
+        r2_T = ss_tot_T == 0 ? 0.0 : 1.0 - (ss_res_T / ss_tot_T)
+
+        # Print overall metrics
+        println("Continuous Simulation Results:")
+        @printf("  Starting voltage | %.4f V\n", v_init)
+        @printf("  Voltage          | RMSE: %7.2f mV | R²: %.4f\n", rmse_v * 1000, r2_v)
+        @printf("  Temperature      | RMSE: %7.2f °C | R²: %.4f\n\n", rmse_T, r2_T)
+
+        # Plot continuous traces
+        plot!(p_volt, t_sim, v_sim, label="Sim. voltage", lw=2, color=colours[1])
+        plot!(p_temp, t_sim, T_shell_sim, label="Sim. surface temp", lw=2, color=colours[2])
+        plot!(p_curr, t_sim, i_sim, label="Sim. current", lw=2, color=colours[3])
+
+    else
+        # Initialise empty plots for segmented traces
+        p_volt = plot(ylabel="Voltage (V)", legend=:bottomleft, margin=m, xlims=xlim_range)
+        p_temp = plot(ylabel="Temperature (°C)", legend=:topleft, margin=m, xlims=xlim_range)
+        p_curr = plot(xlabel="Time (s)", ylabel="Current (A)", legend=:topleft, margin=m, xlims=xlim_range)
+
+        # Extract discharge segments from dataframe
+        segments = extract_discharge_segments(df)
+        println("Found $(length(segments)) discharge segments to simulate.\n")
+
+        for (idx, seg) in enumerate(segments)
+            println("Simulating segment $idx...")
+
+            # Extract segment time and convert to local time starting from zero
+            t_seg_exp = seg[!, "Test Time [s]"]
+            t_sim_input = t_seg_exp .- t_seg_exp[1]
+
+            # Extract experimental variables for segment
+            v_seg_exp = seg[!, "Voltage [V]"]
+            T_chamber_seg = seg[!, "Temperature Chamber [degC]"]
+            T_surf_seg = seg[!, "Temperature Cell [degC]"]
+            raw_i_seg = seg[!, "Current [A]"]
+            md_seg = seg[!, "Md"]
+
+            # Process segment current
+            i_seg = zeros(Float64, length(raw_i_seg))
+            for j in eachindex(raw_i_seg)
+                mode_str = strip(String(md_seg[j]))
+                if mode_str == "C"
+                    i_seg[j] = -raw_i_seg[j]
+                elseif mode_str == "D"
+                    i_seg[j] = raw_i_seg[j]
+                else
+                    i_seg[j] = 0.0
+                end
+            end
+
+            # Read starting voltage to set accurate initial SOC
+            v_init = v_seg_exp[1]
+            soc_init = v_to_soc_interp(v_init)
+            
+            # Map SOC to stoichiometries
+            z_n_init = p.n.z_0 + soc_init * (p.n.z_100 - p.n.z_0)
+            z_p_init = p.p.z_0 + soc_init * (p.p.z_100 - p.p.z_0)
+
+            # Set initial solid concentrations
+            p.n.c₀ = z_n_init * p.n.c₊  
+            p.p.c₀ = z_p_init * p.p.c₊
+
+            # Build coupled core shell system with segment parameters
+            T_amb_seg_K = T_chamber_seg[1] + 273.15
+            @mtkbuild sys_seg = SingleCellCoreShellPack(params=p, config=(1,1), h_conv=19.5, T_ambient=T_amb_seg_K)
+
+            # Format data for current drive step
+            raw_dt = diff(t_sim_input)
+            valid_indices = findall(x -> x > 0.0, raw_dt)
+            clean_dt = raw_dt[valid_indices]
+            clean_i = i_seg[valid_indices]
+            clean_T_amb = T_chamber_seg[valid_indices .+ 1] .+ 273.15 
+
+            # Define experiment for segment
+            exp_seg = Experiment([
+                CurrentDriveStep(Any[clean_dt, clean_i, clean_T_amb], t_sim_input[end])
+            ])
+
+            # Run simulation
+            sol = with_logger(NullLogger()) do
+                simulate(sys_seg, exp_seg; saveat=10.0, verbose=false)
+            end
+
+            # Verify solver stability and calculate metrics
+            if sol.t[end] > 10.0
+                # Shift time back to global timeframe
+                t_shift = t_seg_exp[1]
+                t_sim = sol.t .+ t_shift
+                v_sim = sol[sys_seg.cell.v]
+                i_sim = sol[sys_seg.I]
+                T_shell_sim = sol[sys_seg.thermal.shell_cap.T] .- 273.15
+
+                # Calculate metrics for segment
+                v_sim_interp = LinearInterpolation(v_sim, t_sim)
+                T_shell_sim_interp = LinearInterpolation(T_shell_sim, t_sim)
+
+                t_clamped = clamp.(t_seg_exp, t_sim[1], t_sim[end])
+                v_sim_mapped = v_sim_interp.(t_clamped)
+                T_sim_mapped = T_shell_sim_interp.(t_clamped)
+
+                rmse_v = sqrt(mean((v_sim_mapped .- v_seg_exp).^2))
+                rmse_T = sqrt(mean((T_sim_mapped .- T_surf_seg).^2))
+
+                ss_res_v = sum((v_seg_exp .- v_sim_mapped).^2)
+                ss_tot_v = sum((v_seg_exp .- mean(v_seg_exp)).^2)
+                r2_v = ss_tot_v == 0 ? 0.0 : 1.0 - (ss_res_v / ss_tot_v)
+
+                ss_res_T = sum((T_surf_seg .- T_sim_mapped).^2)
+                ss_tot_T = sum((T_surf_seg .- mean(T_surf_seg)).^2)
+                r2_T = ss_tot_T == 0 ? 0.0 : 1.0 - (ss_res_T / ss_tot_T)
+
+                # Print segment metrics
+                println("Segment $idx Results:")
+                @printf("  Starting voltage | %.4f V\n", v_init)
+                @printf("  Voltage          | RMSE: %7.2f mV | R²: %.4f\n", rmse_v * 1000, r2_v)
+                @printf("  Temperature      | RMSE: %7.2f °C | R²: %.4f\n\n", rmse_T, r2_T)
+
+                # Plot experimental segment traces
+                plot!(p_volt, t_seg_exp, v_seg_exp, label=idx==1 ? "Exp. voltage" : "", lw=2, color=:black, linestyle=:dash)
+                plot!(p_temp, t_seg_exp, T_surf_seg, label=idx==1 ? "Exp. surface temp" : "", lw=2, color=:black, linestyle=:dash)
+                plot!(p_temp, t_seg_exp, T_chamber_seg, label=idx==1 ? "Exp. chamber temp" : "", lw=2, color=:gray, linestyle=:dot)
+                plot!(p_curr, t_seg_exp, i_seg, label=idx==1 ? "Exp. current" : "", lw=2, color=:black, linestyle=:dash)
+
+                # Plot simulation segment traces using a single fixed colour
+                plot!(p_volt, t_sim, v_sim, label=idx==1 ? "Sim. voltage" : "", lw=2, color=colours[1])
+                scatter!(p_volt, [t_shift], [v_init], shape=:cross, markersize=6, color=:black, label="")
+
+                plot!(p_temp, t_sim, T_shell_sim, label=idx==1 ? "Sim. surface temp" : "", lw=2, color=colours[2])
+                plot!(p_curr, t_sim, i_sim, label=idx==1 ? "Sim. current" : "", lw=2, color=colours[3])
+            else
+                println("Warning: Simulation $idx aborted early.\n")
+            end
+        end
+    end
+
+    # Combine layouts
+    l = @layout [a; b; c]
+    p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core shell thermal SPMe validation")
+    display(p_combined)
 end
-
-# Plot temperature
-p_temp = plot(t_exp, T_surf_exp_masked, label="Exp. surface temp", ylabel="Temperature (°C)", 
-              lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
-plot!(p_temp, t_exp, T_chamber_exp_masked, label="Exp. chamber temp", lw=2, color=:gray, linestyle=:dot)
-
-# Highlight segment start points
-scatter!(p_temp, t_exp[starts], T_surf_exp[starts], marker=:cross, color=:black, markersize=6, label="")
-
-# Overlay simulation results
-for (i, res) in enumerate(sim_results)
-    t_s, _, T_s, _ = res
-    lbl = i == 1 ? "Sim. surface temp" : ""
-    plot!(p_temp, t_s, T_s, label=lbl, lw=2, color=colours[2])
-end
-
-# Plot current
-p_curr = plot(t_exp, i_exp_masked, label="Exp. current", xlabel="Time (s)", ylabel="Current (A)", 
-              lw=2, color=:black, linestyle=:dash, legend=:topleft, margin=m, xlims=xlim_range)
-
-# Highlight segment start points
-scatter!(p_curr, t_exp[starts], i_exp[starts], marker=:cross, color=:black, markersize=6, label="")
-
-# Overlay simulation results
-for (i, res) in enumerate(sim_results)
-    t_s, _, _, i_s = res
-    lbl = i == 1 ? "Sim. current" : ""
-    plot!(p_curr, t_s, i_s, label=lbl, lw=2, color=colours[3])
-end
-
-# Combine layouts
-l = @layout [a; b; c]
-p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core shell thermal SPMe validation")
-display(p_combined)

@@ -23,7 +23,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     # Components
     @named J = RealInput() # Volumetric current density
-    @named T = RealInput() # Ambient temperature
+    @named T = RealInput(guess=298.15) # Ambient temperature
 
     # Time-dependent state variables
     @variables begin
@@ -70,7 +70,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         # Outer most cell
         Dt(c[end]) ~ 
             (
-            -Aᵣ[end] * J.u / p.aₖ / F 
+            -Aᵣ[end] * J.u / F 
             - Dₗ[end] * (c[end]-c[end-1]) * Aₗ[end] / Δr
             ) / Vᵢ[end]
     ]

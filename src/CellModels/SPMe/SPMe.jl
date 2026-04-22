@@ -81,12 +81,13 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
     @named sei = SEIGrowth(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
+    @named plating = LithiumPlating(p=params.n.side_reactions[1],s=params.n, g=g)
 
-    submodels = [p,n,T,pe,ne,el,sei]
+    submodels = [p,n,T,pe,ne,el,sei,plating]
 
     @variables begin
         # Terminal voltage and current
-        v(t)
+        v(t), [guess=4.0]
         i(t)
         soc(t)
 
@@ -115,6 +116,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Qf(t)       # Film Ohmic heat
         Q_rev(t)    # Reversible heat
         Q_total(t)  # Total heat
+        Q_sei(t)
+        Q_plating(t)
     end
 
     if Q==0
@@ -142,8 +145,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
-    ηᵣn = 2*R*T.u/F*asinh(ne.J.u/params.n.aₖ/2/j̄ₙ0)
-    ηᵣp = 2*R*T.u/F*asinh(pe.J.u/params.p.aₖ/2/j̄ₚ0)
+    ηᵣn = 2*R*T.u/F*asinh(ne.J.u / (2*j̄ₙ0))
+    ηᵣp = 2*R*T.u/F*asinh(pe.J.u / (2*j̄ₚ0))
 
     # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
     # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
@@ -190,8 +193,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.Δϕₙ.u ~ ne.U₀ + ηᵣn - sei.ϕf_x,
 
         # Volumetric current density
-        pe.J.u ~  -i_app/params.e.Lₚ, # Current density in the positive electrode
-        ne.J.u ~  i_app/params.e.Lₙ, # Current density in the negative electrode
+        ne.J.u ~ (i_app/params.e.Lₙ)/aₙ - sei.j_sei_x - plating.j_stripping_x, # Current density in the negative electrode
+        pe.J.u ~  -i_app/params.e.Lₚ/aₚ, # Current density in the positive electrode
         
         aₙ ~ 3*(1-el.ϵ̄ₙ)/params.n.Rₖ,
         aₚ ~ params.p.aₖ,#3*(1-el.ϵ̄ₚ)/params.p.Rₖ,
@@ -201,6 +204,14 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         sei.T.u ~ T.u,
         sei.aₖ.u ~ aₙ,
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+
+        # Li plating
+        plating.J.u ~ne.J.u,
+        plating.T.u ~ T.u,
+        plating.aₖ.u ~ aₙ,
+        [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        plating.η_sei.u ~ sei.ϕf,
+        [plating.cₑ.u[i] ~ params.e.cₜ for i in 1:Nn]...,
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
@@ -212,9 +223,11 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Qₛ ~ -i_app * Δϕₛ / L,
         Qf ~ -i_app * sei.ϕf_x / L,
         Q_rev ~ (i_app / L) * T.u * (dUn_dT_f(ne.z) - dUp_dT_f(pe.z)),
+        Q_sei ~ -sei.j_sei_x * sei.ϕf_x / L,
+        Q_plating ~ -plating.j_stripping_x * plating.ϕf_x / L,
         
         # Total generated heat 
-        Q_total ~ el.Qₑ + Qᵢ + Qₛ + Qf + Q_rev
+        Q_total ~ el.Qₑ + Qᵢ + Qₛ + Qf + Q_rev + Q_sei + Q_plating
     ]
 
     # Terminate simulation when limits reached

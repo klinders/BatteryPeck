@@ -10,6 +10,7 @@ include("ParameterSets/Base.jl")
 include("helpers.jl")
 include("ParameterSets/Chen2020.jl")
 include("CellModels/SPMe/SPMe.jl")
+include("CellModels/SPMe/LithiumPlating.jl")
 
 include("ThermalModels/CellThermal.jl")
 include("ThermalModels/PackGeometry.jl")

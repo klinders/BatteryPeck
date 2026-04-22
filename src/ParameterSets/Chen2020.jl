@@ -25,7 +25,7 @@ sei_parameters = SideReactionParameters(
 
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
-    aₖ = 3.84e5, # Surface area density in m^-1
+    aₖ = 383960, # Surface area density in m^-1
     Dₖ = c -> 3.3e-14, # Electrode diffusivity in m^2*s^-1
     σₖ = 215, # Conductivity in S*m^-1
     c₀ = 29866, # Initial electrode concentration in mol*m^-3
@@ -84,7 +84,7 @@ function Chen2020()
         Wcc = 1.58,
         n_el = 1,
         Q₀ = 5, # Original battery capacity in Ah
-        Vmin = 2.5,
+        Vmin = 2.0,
         Vmax = 4.2
     )
 end
