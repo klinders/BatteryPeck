@@ -18,17 +18,17 @@ function circle_shape(x, y, r)
 end
 
 let
-    n_rows = 5
-    n_cols = 6
+    n_rows = 1
+    n_cols = 4
 
     println("Generating geometry map...")
     
     geom = Base.invokelatest(() -> build_pack_geometry(
         rows=n_rows, cols=n_cols, 
         pattern=:square, 
-        tms_routing=:double_row, 
+        tms_routing=:single_row, 
         tms_encasement=:start_bottom,
-        cell_pitch=0.023
+        cell_pitch=0.025
     ))
 
     println("Calculating unified plot boundaries...")

@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "b1020ae2351c028e1b97998e426723d0af42698b"
+project_hash = "01e6d377bbd1bea32d12200e42f67a447a56d364"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "f7304359109c768cf32dc5fa2d371565bb63b68a"
@@ -146,7 +146,7 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 version = "1.11.0"
 
 [[deps.BatteryToolkit]]
-deps = ["CSV", "DataFrames", "DataInterpolations", "DifferentialEquations", "ModelingToolkit", "ModelingToolkitStandardLibrary", "NaNMath", "OrdinaryDiffEq", "Plots", "SciMLBase", "Tables"]
+deps = ["CSV", "DataFrames", "DataInterpolations", "DifferentialEquations", "IfElse", "ModelingToolkit", "ModelingToolkitStandardLibrary", "NaNMath", "OrdinaryDiffEq", "Plots", "SciMLBase", "Tables", "Trapz"]
 path = "."
 uuid = "e9eeebe6-cbd9-464a-ae64-628cb336b211"
 version = "0.1.0"
@@ -534,9 +534,9 @@ version = "6.210.1"
 
 [[deps.DiffEqCallbacks]]
 deps = ["ConcreteStructs", "DataStructures", "DiffEqBase", "DifferentiationInterface", "LinearAlgebra", "Markdown", "PrecompileTools", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArraysCore"]
-git-tree-sha1 = "f17b863c2d5d496363fe36c8d8535cc6a33c9952"
+git-tree-sha1 = "51f445c25b80c26c83c61520cde214adf8c05227"
 uuid = "459566f4-90b8-5000-8ac3-15dfb0a30def"
-version = "4.12.0"
+version = "4.17.0"
 
     [deps.DiffEqCallbacks.extensions]
     DiffEqCallbacksFunctorsExt = "Functors"
@@ -2812,6 +2812,11 @@ version = "0.5.29"
 git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.11.3"
+
+[[deps.Trapz]]
+git-tree-sha1 = "79eb0ed763084a3e7de81fe1838379ac6a23b6a0"
+uuid = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
+version = "2.0.3"
 
 [[deps.Tricks]]
 git-tree-sha1 = "311349fd1c93a31f783f977a71e8b062a57d4101"

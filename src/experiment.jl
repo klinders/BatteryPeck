@@ -15,7 +15,7 @@ using ModelingToolkit
 abstract type Step end
 
 """
-Rest for a given `period`
+Rest for a given `period`.
 """
 struct RestStep <: Step
     period::Real
@@ -32,7 +32,7 @@ struct ChargeStep <: Step
 end
 
 """
-Apply a given  `power` for a given `period`
+Apply a given `power` for a given `period`.
 """
 struct PowerStep <: Step
     value::Real
@@ -40,7 +40,7 @@ struct PowerStep <: Step
 end
 
 """
-Apply a given  `current` for a given `period`
+Apply a given `current` for a given `period`.
 """
 struct CurrentStep <: Step
     value::Real
@@ -48,15 +48,15 @@ struct CurrentStep <: Step
 end
 
 """
-Apply a drivecycle from the given csv
+Apply a drive cycle from the given csv.
 
 **Arguments**
 - `csv ::Vector{Any}` Path to the csv driving cycle
 - `period ::Real` (optional) time to apply the cycle in seconds
 
-At the moment, the period can be up to the lenght of the csv. 
+At the moment, the period can be up to the length of the csv. 
 
-TODO: Repeat the cycle when period is longer then csv
+TODO: Repeat the cycle when period is longer then csv.
 """
 struct DriveStep <: Step
     csv::Vector{Any}
@@ -86,8 +86,10 @@ struct DriveStep <: Step
     end
 end
 
-# Drive cycle (dis)charge profile, current-based instead of power-based for usage of Chen2020 data
-# Inputs: ["current vs. time csv"; "time limit"]
+"""
+Drive cycle (dis)charge profile, current-based instead of power-based for usage of Chen2020 data.
+Inputs: ["current vs. time csv"; "time limit"]
+"""
 struct CurrentDriveStep <: Step
     csv::Vector{Any}
     period::Real
@@ -150,38 +152,52 @@ struct CurrentDriveStep <: Step
     end
 end
 
-"Get the initial value from a power step"
+"""
+Get the initial value from a power step.
+"""
 function get_p0(s::PowerStep)
     return -s.value
 end
 
-"Get the initial value from a current step"
+"""
+Get the initial value from a current step.
+"""
 function get_p0(s::CurrentStep)
     return -s.value * 4.2
 end
 
-"Get the initial value from a drive step"
+"""
+Get the initial value from a drive step.
+"""
 function get_p0(s::DriveStep)
     return -s.csv[2][1]
 end
 
-"Get the initial value from a currentdrive step"
+"""
+Get the initial value from a currentdrive step.
+"""
 function get_p0(s::CurrentDriveStep)
     return -s.csv[2][1] * 4.2
 end
 
-"Get the initial value from a charge step"
+"""
+Get the initial value from a charge step.
+"""
 function get_p0(s::ChargeStep)
     return s.power
 end
 
-"Get the initial value from a rest step"
+"""
+Get the initial value from a rest step.
+"""
 function get_p0(s::RestStep)
     return 0
 end
 
-# Concatenate multiple steps into single instruction list
-# Inputs: ["list of steps"]
+"""
+Concatenate multiple steps into single instruction list.
+Inputs: ["list of steps"]
+"""
 struct Experiment
     # (Dis)charge instructions
     steps::Array{Step}
@@ -218,115 +234,133 @@ function Base.:+(a::AbstractVector{<:Step}, b::AbstractVector{<:Step})
     return [a;b]
 end
 
-# Update power in integrator solver memory and set current to zero
+"""
+Update power in integrator solver memory and set current to zero.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
-    set_u!(integrator, sys.Pin, -step.value)
-    set_u!(integrator, sys.Iin, 0)
+    integrator.ps[sys.Pin] = -step.value
+    integrator.ps[sys.Iin] = 0.0
     u_modified!(integrator, true)
-    OrdinaryDiffEq.step!(integrator, step.period, true)
+    
+    # Place a stop sign at the end of the period and step adaptively
+    t_target = integrator.t + step.period
+    SciMLBase.add_tstop!(integrator, t_target)
+    while integrator.t < t_target
+        SciMLBase.step!(integrator)
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
+    end
 end
 
-# Clear power and current in integrator solver memory
+"""
+Clear power and current in integrator solver memory.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::RestStep)
-    set_u!(integrator, sys.Pin, 0)
-    set_u!(integrator, sys.Iin, 0)
+    integrator.ps[sys.Pin] = 0.0
+    integrator.ps[sys.Iin] = 0.0
     u_modified!(integrator, true)
-    OrdinaryDiffEq.step!(integrator, step.period, true)
+    
+    t_target = integrator.t + step.period
+    SciMLBase.add_tstop!(integrator, t_target)
+    while integrator.t < t_target
+        SciMLBase.step!(integrator)
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
+    end
 end
 
-# Apply power in integrator solver memory until target SoC is reached
+"""
+Apply power in integrator solver memory until target SoC is reached.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::ChargeStep)
     soc = integrator.sol[sys.cell.soc][end]
     end_soc = step.soc
     t_start = integrator.t
 
     while (soc < end_soc) && (integrator.t - t_start < step.period)
-        set_u!(integrator, sys.Pin, step.power)
-        set_u!(integrator, sys.Iin, 0)
+        integrator.ps[sys.Pin] = step.power
+        integrator.ps[sys.Iin] = 0.0
         u_modified!(integrator, true)
         
-        # Step solver by sixty seconds
-        OrdinaryDiffEq.step!(integrator, 60, true)
+        # Advance adaptively in 60-second chunks to check SoC
+        t_target = min(integrator.t + 60.0, t_start + step.period)
+        SciMLBase.add_tstop!(integrator, t_target)
+        while integrator.t < t_target
+            SciMLBase.step!(integrator)
+            if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
+        end
+        
         soc = integrator.sol[sys.cell.soc][end]
-
-        # Stop applying power if solver terminates
-        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated
-            break
-        end
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
     end
 end
 
-# Apply current in integrator solver memory until target period is reached
+"""
+Apply current in integrator solver memory until target period is reached.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::CurrentStep)
-    t_start = integrator.t
-
-    while integrator.t - t_start < step.period
-        set_u!(integrator, sys.Pin, 0)
-        set_u!(integrator, sys.Iin, -step.value)
-        u_modified!(integrator, true)
-        
-        # Step solver by one second
-        OrdinaryDiffEq.step!(integrator, 1, true)
-
-        # Stop applying current if solver terminates
-        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated
-            break
-        end
+    integrator.ps[sys.Pin] = 0.0
+    integrator.ps[sys.Iin] = -step.value
+    u_modified!(integrator, true)
+    
+    t_target = integrator.t + step.period
+    SciMLBase.add_tstop!(integrator, t_target)
+    while integrator.t < t_target
+        SciMLBase.step!(integrator)
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
     end
 end
 
-# Apply power values from CSV profile until end is reached
+"""
+Apply power values from CSV profile until end is reached.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::DriveStep)
-    # Check if ambient temperature data exists in array
     has_Tamb = length(step.csv) >= 3
 
     for idx in 1:length(step.csv[1])
         dt = step.csv[1][idx]
-        value = step.csv[2][idx]
         
-        # Apply power directly using positive charging convention
-        set_u!(integrator, sys.Pin, value)
-        set_u!(integrator, sys.Iin, 0)
+        integrator.ps[sys.Pin] = step.csv[2][idx]
+        integrator.ps[sys.Iin] = 0.0
         
-        # Update ambient temperature if provided
         if has_Tamb && hasproperty(sys, :T_amb)
-            set_u!(integrator, sys.T_amb, step.csv[3][idx])
+            integrator.ps[sys.T_amb] = step.csv[3][idx]
         end
-
         u_modified!(integrator, true)
-        OrdinaryDiffEq.step!(integrator, dt, true)
 
-        # Stop applying power if solver terminates
-        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated
-            break
+        t_target = integrator.t + dt
+        SciMLBase.add_tstop!(integrator, t_target)
+        while integrator.t < t_target
+            SciMLBase.step!(integrator)
+            if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
         end
+        
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
     end
 end
 
-# Apply current values from CSV profile until end is reached
+"""
+Apply current values from CSV profile until end is reached.
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::CurrentDriveStep)
-    # Check if ambient temperature data exists in array
     has_Tamb = length(step.csv) >= 3
 
     for idx in 1:length(step.csv[1])
         dt = step.csv[1][idx]
-        current_val = step.csv[2][idx]
         
-        # Apply current directly, bypassing external power conversion
-        set_u!(integrator, sys.Pin, 0)
-        set_u!(integrator, sys.Iin, -current_val)
+        integrator.ps[sys.Pin] = 0.0
+        integrator.ps[sys.Iin] = -step.csv[2][idx]
         
-        # Update ambient temperature if provided
         if has_Tamb && hasproperty(sys, :T_amb)
-            set_u!(integrator, sys.T_amb, step.csv[3][idx])
+            integrator.ps[sys.T_amb] = step.csv[3][idx]
         end
-
         u_modified!(integrator, true)
-        OrdinaryDiffEq.step!(integrator, dt, true)
 
-        # Stop applying current if solver terminates
-        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated
-            break
+        t_target = integrator.t + dt
+        SciMLBase.add_tstop!(integrator, t_target)
+        while integrator.t < t_target
+            SciMLBase.step!(integrator)
+            if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
         end
+        
+        if integrator.sol.retcode == SciMLBase.ReturnCode.Terminated break end
     end
 end

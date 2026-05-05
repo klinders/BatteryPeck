@@ -423,10 +423,10 @@ function build_pack_geometry(;
         for c in 1:cols
             idx = get_idx(r, c)
             if c < cols
-                push!(electrical_edges, (idx, get_idx(r, c+1), :parallel))
+                push!(electrical_edges, (idx, get_idx(r, c+1), :series))
             end
             if r < rows
-                push!(electrical_edges, (idx, get_idx(r+1, c), :series))
+                push!(electrical_edges, (idx, get_idx(r+1, c), :parallel))
             end
         end
     end

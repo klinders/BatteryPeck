@@ -13,23 +13,23 @@ using ModelingToolkitStandardLibrary.Thermal
 """
     FluidSource(; name, m_flow_val, T_val)
 
-Provides constant mass flow rate and inlet temperature boundary condition.
-
-Editable values:
-`m_flow_val`: Alters total coolant mass flow entering system.
-`T_val`: Alters inlet temperature of fluid.
+Provides dynamic mass flow rate and inlet temperature boundary condition.
 """
 @component function FluidSource(; name, m_flow_val, T_val)
     @named port = FluidPort()
     
-    # Indicate negative value for mass leaving source to enter pipe
+    # Define boundaries as parameters to allow callback intervention
+    @parameters begin
+        m_flow_in = m_flow_val
+        T_inlet = T_val
+    end
+    
     eqs = [
-        port.m_flow ~ -m_flow_val, 
-        port.T ~ T_val
+        port.m_flow ~ -m_flow_in, 
+        port.T ~ T_inlet
     ]
     
-    # Return ODE system for fluid source
-    ODESystem(eqs, t, [], []; systems=[port], name=name)
+    ODESystem(eqs, t, [], [m_flow_in, T_inlet]; systems=[port], name=name)
 end
 
 """

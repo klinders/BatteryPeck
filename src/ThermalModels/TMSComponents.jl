@@ -164,7 +164,7 @@ Editable values:
                             )
                          ),
                          
-        # Determine final darcy friction factor (1.0/Re instead of 64/Re for friciton adjustment at low speeds)
+        # Determine final darcy friction factor (1.0/Re instead of 64/Re for friction adjustment at low speeds)
         f_major ~ IfElse.ifelse(Re < Re_crit, 
             (1.0 / Re) * f_curved_ratio,
             4.0 * (sqrt(a_hyd / R_c) * (0.00725 + 0.076 * (Re * (a_hyd / R_c)^2)^-0.25))

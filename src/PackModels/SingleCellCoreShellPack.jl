@@ -9,19 +9,23 @@ using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Thermal
 using BatteryToolkit
 
+"""
+Construct single cell pack coupled with core-shell thermal network.
+"""
 function SingleCellCoreShellPack(; name, params=Chen2020(), config=(1,1), Qcell=5, h_conv=15.0, T_ambient=298.15)
     # Surface area cell
     A_cell = 0.0053 
     
     @parameters begin
         t
+        
+        # Define boundary inputs as parameters
+        Pin = 0.0
+        Iin = 0.0
+        T_amb = T_ambient
     end
-    D = Differential(t)
 
     @variables begin 
-        Pin(t) = 0, [input=true]
-        Iin(t) = 0, [input=true]
-        T_amb(t) = T_ambient, [input=true] # Ambient boundary temperature
         V(t), [guess=4.19*config[1]]
         I(t), [guess=0.0]
     end
@@ -43,10 +47,6 @@ function SingleCellCoreShellPack(; name, params=Chen2020(), config=(1,1), Qcell=
     eqs = [
         V ~ config[1]*cell.v
         I ~ config[2]*cell.i
-        D(Pin) ~ 0
-        D(Iin) ~ 0
-        D(T_amb) ~ 0
-        
         power.u ~ Pin
         current.u ~ Iin
         amb_temp_in.u ~ T_amb

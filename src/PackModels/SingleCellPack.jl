@@ -2,18 +2,21 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+"""
+Construct single cell pack model.
+"""
 function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
 
     @parameters begin
         t # Time variable
+        
+        # Define boundary inputs as parameters
+        Pin = 0.0
+        Iin = 0.0
+        Tin = 298.15
     end
 
-    D = Differential(t)
-
     @variables begin 
-        Pin(t)=0, [input=true]
-        Iin(t)=0, [input=true]
-        Tin(t)=298, [input=true]
         V(t)
         I(t)
     end
@@ -28,9 +31,6 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
     eqs = [
         V ~ config[1]*cell.v
         I ~ config[2]*cell.i
-        D(Pin) ~ 0
-        D(Iin) ~ 0
-        D(Tin) ~ 0
         power.u ~ Pin
         current.u ~ Iin
         temp.u ~ Tin

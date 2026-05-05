@@ -9,24 +9,32 @@
 # - kwargs = keyword arguments for solver options of integrator
 # =====================================================================================================================
 
-# Import packages
 using ModelingToolkit, OrdinaryDiffEq
 
-# Base method compiles ODE problem every time for ease of use
-function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, kwargs...)
+"""
+    simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, callback=nothing, kwargs...)
+
+Compile ODE problem every time for ease of use.
+"""
+function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, callback=nothing, kwargs...)
     
     # Convert symbolic ODE expressions into static code using new power and current variables
     prob = ODEProblem(sys, [sys.Pin=>experiment.p0, sys.Iin=>0.0], (0.0,experiment.tend))
 
-    # Route to fast method
-    return simulate(sys, prob, experiment, alg; reltol=reltol, abstol=abstol, kwargs...)
+    # Route to fast method passing callback explicitly
+    return simulate(sys, prob, experiment, alg; reltol=reltol, abstol=abstol, callback=callback, kwargs...)
 end
 
-# Fast method accepts pre-compiled ODE problem to bypass compilation overhead during benchmarks or repeated runs
-function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, kwargs...)
+"""
+    simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, callback=nothing, kwargs...)
+
+Accept pre-compiled ODE problem to bypass compilation overhead during benchmarks or repeated runs.
+"""
+function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experiment::Experiment, alg=QNDF(); reltol=1e-6, abstol=1e-7, callback=nothing, kwargs...)
     
     # Stop simulation between every step when inputs are modified between experiment stages
-    integrator = init(prob, alg; tstops=experiment.tstops, save_everystep=false, reltol=reltol, abstol=abstol, kwargs...)
+    # Initialise integrator and apply optional callback for TMS control
+    integrator = init(prob, alg; tstops=experiment.tstops, save_everystep=false, reltol=reltol, abstol=abstol, callback=callback, kwargs...)
 
     print("Simulating for: $(experiment.tend) seconds\n")
     
@@ -43,8 +51,5 @@ function simulate(sys::ModelingToolkit.AbstractSystem, prob::ODEProblem, experim
         end
     end
 
-    # Force integrator to save last simulation point
-    SciMLBase.savevalues!(integrator, true)
-    
     return integrator.sol
 end

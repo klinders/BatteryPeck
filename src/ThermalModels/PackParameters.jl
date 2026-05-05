@@ -173,38 +173,37 @@ Editable values:
 `cell_diameter`: Adjusts active cell diameter for gap calculations.
 """
 function build_pack_parameters(;
-        coolant::Symbol = :water_glycol,
+        coolant::Symbol = :water_nema2026,
         ambient_temp::Float64 = 298.15,
         inlet_temp::Float64 = 298.15,
-        flow_rate::Float64 = 0.01,
-        cell_pitch::Float64 = 0.023,
+        flow_rate::Float64 = 0.02994,
+        cell_pitch::Float64 = 0.025,
         cell_diameter::Float64 = 0.021
     )
     
-    # Typical multi-port extruded aluminium cooling ribbon
-    # Define baseline cooling channel geometry
+    # Define baseline cooling channel geometry matching Nema 2026 1C/5C validation
     tms_geom = TMSGeometry(
-        channel_width = 0.018,
-        channel_height = 0.002,
-        number_of_channels = 4,
+        channel_width = 0.002,
+        channel_height = 0.050,
+        number_of_channels = 1,
         wall_thickness = 0.001
     )
     
     # Construct and return master parameter set
     return PackParameters(
         fluid = get_coolant_properties(coolant),
-        pipe_wall = get_solid_properties(:aluminium_6061),
+        pipe_wall = get_solid_properties(:aluminium_nema2026),
         potting_material = get_solid_properties(:bergquist_tgf_1500),
-        casing_material = get_solid_properties(:aluminium_6061),
+        casing_material = get_solid_properties(:aluminium_nema2026),
         tms_geometry = tms_geom,
         
-        cell_gap_thickness = cell_pitch - cell_diameter,
+        cell_gap_thickness = (cell_pitch - cell_diameter) / 2.0,
         axial_potting_thickness = 0.005, 
-        casing_thickness = 0.003,        
+        casing_thickness = 0.01,        
         
         ambient_temperature = ambient_temp,
         inlet_temperature = inlet_temp,
         mass_flow_rate = flow_rate,
-        ambient_convection_coefficient = 10.0 
+        ambient_convection_coefficient = 5.0 
     )
 end

@@ -5,6 +5,7 @@ using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Thermal
+using DiffEqCallbacks
 
 include("ParameterSets/Base.jl")
 include("helpers.jl")
@@ -17,13 +18,14 @@ include("ThermalModels/PackGeometry.jl")
 include("ThermalModels/PackParameters.jl")
 include("ThermalModels/TMSComponents.jl")
 include("ThermalModels/SystemBuilder.jl")
+include("ThermalModels/TMSControl.jl")
 
 include("experiment.jl")
 include("solvers.jl")
 include("PackModels/SingleCellPack.jl")
 include("PackModels/MultiCellPack.jl")
 include("PackModels/SingleCellCoreShellPack.jl")
-
+include("PackModels/CoupledMultiCellPack.jl")
 
 export SPMe, Chen2020, BatteryParameters, PowerStep, CurrentStep, DriveStep,
        RestStep, ChargeStep, CurrentDriveStep, SingleCellPack, MultiCellPack, Experiment, 
@@ -32,5 +34,7 @@ export SPMe, Chen2020, BatteryParameters, PowerStep, CurrentStep, DriveStep,
        FluidProperties, SolidProperties, TMSGeometry, PackParameters,
        get_coolant_properties, get_solid_properties,
        FluidPort, PipeWallNode, FluidNode, TMSNode,
-       build_pack_system, build_pack_parameters
+       build_pack_system, build_pack_parameters,
+       velocity_to_mass_flow, build_baseline_callback, build_anticipative_callback,
+       CoupledMultiCellPack
 end
