@@ -3,10 +3,12 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+
 include("SolidParticle.jl")
 include("Electrolyte.jl")
 include("Potentials.jl")
-include("SEIGrowth.jl")
+include("SEI.jl")
+include("LithiumPlating.jl")
 
 function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
@@ -43,8 +45,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
-    @named sei = SEIGrowth(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
-    @named plating = LithiumPlating(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
+    @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
+    @named plating = LithiumPlating.NoPlating(p=params.n.side_reactions[1],s=params.n, g=g) 
 
     submodels = [p,n,T,pe,ne,el,sei,plating]
 
@@ -149,7 +151,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/aₙ, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/aₚ, # Current density in the positive electrode
         
-        aₙ ~ 3*(1-el.ϵ̄ₙ)/params.n.Rₖ,
+        aₙ ~ 3*(1-params.e.ϵₙ)/params.n.Rₖ,
         aₚ ~ params.p.aₖ,
 
         # # Ne sei reaction
@@ -158,7 +160,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         sei.aₖ.u ~ aₙ,
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
 
-        # Li plating
+        # # Li plating
         plating.J.u ~ne.J.u,
         plating.T.u ~ T.u,
         plating.aₖ.u ~ aₙ,

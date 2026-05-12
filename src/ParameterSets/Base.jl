@@ -30,6 +30,8 @@ Base.@kwdef mutable struct SideReactionParameters
     R               # SEI Resistivity
     j_sei₀          # Reaction exchange current
     c::Function     # Concentration dependence function
+    D_sol           # Solvent diffusivity in m^2/s
+    c_sol           # Solvent concentration in mol/m^3
 end
 
 Base.@kwdef mutable struct SolidParticleParameters

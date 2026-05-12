@@ -13,7 +13,9 @@ sei_parameters = SideReactionParameters(
     V̄ = 9.585e-05, # Partial molar volume
     R = 2e5, # SEI resistivity
     j_sei₀ = 1.5e-7, # SEI Reaction exchangcurrent [A.m-2]
-    c = (el) -> nothing # Concentration dependence function
+    c = (el) -> nothing, # Concentration dependence function
+    D_sol = 2.5e-22, # Solvent diffusivity in m^2/s
+    c_sol = 2636.0, # Solvent concentration in mol/m^3
 )
 
 n = SolidParticleParameters(
