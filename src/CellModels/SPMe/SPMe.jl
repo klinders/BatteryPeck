@@ -58,6 +58,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         U₀(t)
         ηᵣ(t)
+        ηᵣ̅n(t)
+        ηᵣ̅p(t)
         (ηₙ(t))[1:g.el.Nx[1]]
         (ηₚ(t))[1:g.el.Nx[3]]
         Δϕₛ(t), [guess=0]
@@ -101,8 +103,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
-    ηᵣn = 2*R*T.u/F*asinh(ne.J.u/params.n.aₖ/2/j̄ₙ0)
-    ηᵣp = 2*R*T.u/F*asinh(pe.J.u/params.p.aₖ/2/j̄ₚ0)
+    ηᵣn = [2*R*T.u/F*asinh(i_app/params.e.Lₙ/aₙ/jₙ0[i]) for i in 1:Nn]
+    ηᵣp = [-2*R*T.u/F*asinh(i_app/params.e.Lₚ/aₚ/jₚ0[i]) for i in 1:Np]
 
     # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
     # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
@@ -120,7 +122,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         ## Potentials ##
         U₀ ~ pe.U₀ - ne.U₀,
-        ηᵣ ~ ηᵣp - ηᵣn,
+        ηᵣ̅n ~ sum(ηᵣn)/Nn,
+        ηᵣ̅p ~ sum(ηᵣp)/Np,
+        ηᵣ ~ ηᵣ̅p - ηᵣ̅n,
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
         # Exchange current densities
@@ -146,7 +150,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.i_app.u ~ i_app,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
-        el.Δϕₙ.u ~ ne.U₀ + ηᵣn - sei.ϕf_x,
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣ̅n - sei.ϕf_x,
 
         ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/aₙ, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/aₚ, # Current density in the positive electrode
