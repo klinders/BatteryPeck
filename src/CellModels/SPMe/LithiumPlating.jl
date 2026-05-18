@@ -57,7 +57,7 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
 end
 
-function Plating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
+function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
         t
@@ -81,6 +81,7 @@ function Plating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToo
     α_plating = 0.65 # Li plating transfer coefficient
     α_stripping = 1 - α_plating
     k_plating = 1e-9
+    V̄ = 9.585e-05 # Partial molar volume of lithium [m3.mol-1]
 
     j_strip0 = F*k_plating*1000
 
@@ -88,11 +89,15 @@ function Plating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToo
         # Plating concentration
         (c_plating(t))[1:N] = 0
         (c_dead(t))[1:N] = 0
+        (L_plating(t))[1:N] = 0
+        (L_dead(t))[1:N] = 0
         (j_stripping(t))[1:N], [guess=j_strip0]
         (ϕf(t))[1:N]
 
         c_plating_x(t)
         c_dead_x(t)
+        L_plating_x(t)
+        L_dead_x(t)
         j_stripping_x(t)
         ϕf_x(t)
     end
@@ -114,6 +119,10 @@ function Plating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToo
         c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
         c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
         j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
+        [L_plating[i] ~ c_plating[i]*V̄/aₖ.u for i in 1:N]...,
+        [L_dead[i] ~ c_dead[i]*V̄/aₖ.u for i in 1:N]...,
+        L_plating_x ~ sum([L_plating[i] for i in 1:N])/N,
+        L_dead_x ~ sum([L_dead[i] for i in 1:N])/N,
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
