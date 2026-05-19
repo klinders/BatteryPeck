@@ -75,6 +75,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
         aₚ(t)
 
+        #temp
+        j_tot_ne(t)
+        aj_tot_ne(t)
+
         Rᵢ(t)
     end
 
@@ -103,8 +107,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
-    ηᵣn = [2*R*T.u/F*asinh(i_app/params.e.Lₙ/aₙ/jₙ0[i]) for i in 1:Nn]
-    ηᵣp = [-2*R*T.u/F*asinh(i_app/params.e.Lₚ/aₚ/jₚ0[i]) for i in 1:Np]
+    ηᵣn = [2*R*T.u/F*asinh((i_app/params.e.Lₙ/aₙ)/(2*jₙ0[i])) for i in 1:Nn]
+    ηᵣp = [2*R*T.u/F*asinh((-i_app/params.e.Lₚ/aₚ)/(2*jₚ0[i])) for i in 1:Np]
 
     # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
     # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
@@ -119,6 +123,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         pe.T.u ~ T.u,
         ne.T.u ~ T.u,
         soc ~ ne.z,
+
+        # temp
+        aj_tot_ne ~ i_app/params.e.Lₙ,
+        j_tot_ne ~ aj_tot_ne/aₙ,
 
         ## Potentials ##
         U₀ ~ pe.U₀ - ne.U₀,

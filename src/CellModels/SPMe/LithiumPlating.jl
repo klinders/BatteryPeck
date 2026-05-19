@@ -116,7 +116,7 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
 
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        [j_stripping[i] ~ -j0_plating[i]*exp(α_plating*F/R/T.u*0.85*η_plating[i]) for i in 1:N]...,
+        [j_stripping[i] ~ -j0_plating[i]*exp(α_plating*F/R/T.u*η_plating[i]) for i in 1:N]...,
         
         # Irreversable
         [Dt(c_dead[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,
