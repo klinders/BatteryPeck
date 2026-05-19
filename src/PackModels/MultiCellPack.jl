@@ -12,7 +12,7 @@ function MultiCellPack(;name, params=Chen2020(), config=(12,1), Qcell=5)
 
     @variables begin 
         P(t)=0, [input=true]
-        T(t)=298, [input=true]
+        T(t)=298.15, [input=true]
         V(t)
         I(t)
     end
@@ -21,7 +21,7 @@ function MultiCellPack(;name, params=Chen2020(), config=(12,1), Qcell=5)
 
     cell = [SPMe(name=Symbol("cell_$i"), params=params) for i in 1:Ncell] # Battery model
     @named power = RealInput(guess=0)
-    @named temp = RealInput(guess=298)
+    @named temp = RealInput(guess=298.15)
     @named source = Current()
     @named ground = Ground()
 

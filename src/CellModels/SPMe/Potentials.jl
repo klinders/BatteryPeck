@@ -2,7 +2,7 @@ function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.Abstrac
 
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
-    T = 298 # Temperature
+    T = 298.15 # Temperature
     
     x = g.el.x_centers
     Lₙ,Lₛ,Lₚ = g.el.Ls[1], g.el.Ls[2], g.el.Ls[3]

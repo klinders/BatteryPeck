@@ -39,7 +39,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # Electrical ports
     @named p = Pin()
     @named n = Pin()
-    @named T = RealInput(guess=298)
+    @named T = RealInput(guess=298.15)
 
     # @named Q = RealOutput()
     @named pe = SolidParticle(p=params.p, g=g.pe)
@@ -170,7 +170,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         plating.aₖ.u ~ aₙ,
         [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
         plating.η_sei.u ~ sei.ϕf,
-        [plating.cₑ.u[i] ~ params.e.cₜ for i in 1:Nn]...,
+        [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] + plating.L_plating[i] + plating.L_dead[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
