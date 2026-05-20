@@ -151,6 +151,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     @named η_sei = RealInputArray(nin=N)
     @named aₖ = RealInput(guess=s.aₖ)
     @named cₑ = RealInputArray(nin=N)
+    @named L_sei = RealInputArray(nin=N)
 
     # Time derivative operator
     Dt = Differential(t)
@@ -162,7 +163,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
 
     j_strip0 = F*k_plating*1000
-
+    
     @variables begin
         # Plating concentration
         (c_plating(t))[1:N] = 0
@@ -175,7 +176,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         (η_stripping(t))[1:N]
         (j0_plating(t))[1:N]
         (j0_stripping(t))[1:N]
-
+        
         c_plating_x(t)
         c_dead_x(t)
         L_plating_x(t)
@@ -185,7 +186,12 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         η_plating_x(t)
         η_stripping_x(t)
     end
+
+    γ₀ = 1e-6
+    L_sei_0 = 5e-9
     
+    coupling = [c_plating[i]*γ₀*L_sei_0/L_sei.u[i] for i in 1:N]
+
     eqns = [
         [j0_stripping[i] ~ F*k_plating*c_plating[i] for i in 1:N]...,
         [j0_plating[i] ~ F*k_plating*cₑ.u[i] for i in 1:N]...,
@@ -200,8 +206,8 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         for i in 1:N]...,
         
         # Partially reversible
-        [Dt(c_dead[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,
-        [Dt(c_plating[i]) ~ 0 for i in 1:N]...,
+        [Dt(c_dead[i]) ~  coupling[i] for i in 1:N]...,
+        [Dt(c_plating[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,
         c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
         c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
         j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
@@ -213,7 +219,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
     ]
 
-    System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
+    System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ, L_sei])
 end
 
 end
