@@ -1,9 +1,11 @@
 using CSV, Tables
 using SciMLBase
 using ModelingToolkit
-# using Dates
+using Dates
 
 abstract type Step end
+
+include("services.jl")
 
 """
 Rest for a period
@@ -98,8 +100,8 @@ struct Experiment
     tend::Float64
     step_count::Int64
     p0::Float64
-    # start_time::Date
-    Experiment(steps::Vector{T} where T<:Step) = begin #, start_time::Date=Date(2020, 1, 1)
+    start_time::Date
+    Experiment(steps::Vector{T} where T<:Step, start_time::Date=Date(2020, 1, 1)) = begin
         tstops = cumsum([s.period for s in steps])
         tend = tstops[end]
         # Remove the last Tstop since it is the end of the simulation
