@@ -46,7 +46,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
     @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
-    @named plating = LithiumPlating.IrreversiblePlating(p=params.n.side_reactions[1],s=params.n, g=g) 
+    @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, g=g) 
 
     submodels = [p,n,T,pe,ne,el,sei,plating]
 

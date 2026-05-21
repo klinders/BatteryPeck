@@ -1,6 +1,7 @@
 using CSV, Tables
 using SciMLBase
 using ModelingToolkit
+# using Dates
 
 abstract type Step end
 
@@ -97,14 +98,15 @@ struct Experiment
     tend::Float64
     step_count::Int64
     p0::Float64
-    Experiment(steps::Vector{T} where T<:Step) = begin
+    # start_time::Date
+    Experiment(steps::Vector{T} where T<:Step) = begin #, start_time::Date=Date(2020, 1, 1)
         tstops = cumsum([s.period for s in steps])
         tend = tstops[end]
         # Remove the last Tstop since it is the end of the simulation
         pop!(tstops)
         step_count = length(steps)
         p0 = get_p0(steps[1])
-        return new(steps, tstops, tend, step_count, p0)
+        return new(steps, tstops, tend, step_count, p0, start_time)
     end
 end
 
