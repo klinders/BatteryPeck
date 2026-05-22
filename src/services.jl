@@ -10,11 +10,18 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
     end_soc = step.soc
     t_start = integrator.t
 
-    while integrator.t - t_start < step.period
+    current = integrator.sol[sys.cell.i][end]
+
+    while integrator.t - t_start < step.period 
         soc = integrator.sol[sys.cell.soc][end]
 
         # Add hysteresis to prevent rapid switching
         if soc < end_soc*0.99
+            new_current = round(integrator.sol[sys.cell.i][end])
+            if new_current != current
+                println("Current $(new_current)")
+                current = new_current
+            end
             set_u!(integrator, sys.Pin, step.power)
             set_u!(integrator, sys.Iin, 0)
         elseif soc > end_soc*1.01
@@ -24,5 +31,8 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 60, true)
 
+        if integrator.sol.retcode != SciMLBase.ReturnCode.Success
+            return integrator.sol.retcode
+        end
     end
 end

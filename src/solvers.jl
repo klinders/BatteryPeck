@@ -11,8 +11,19 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
 
     print("Simulating for: $(experiment.tend*time_scale) $(time_unit)\n")
     
-    for step in ProgressBar(experiment.steps)
+    # Update integrator after every experiment step and print time and voltage at each step
+    for (i, step) in ProgressBar(enumerate(experiment.steps))
+
         step!(integrator, sys, step)
+        
+        println(integrator.sol.retcode)
+        
+        # Check if battery hit safety limit
+        if integrator.sol.retcode != SciMLBase.ReturnCode.Success
+            println("[!] Simulation aborted at t = $(integrator.t)s. Stopping experiment early.")
+            break
+        end
+
     end
 
     return integrator.sol
