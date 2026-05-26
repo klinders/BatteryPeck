@@ -15,6 +15,6 @@ include("solvers.jl")
 include("PackModels/SingleCellPack.jl")
 include("PackModels/MultiCellPack.jl")
 
-export SPMe, Chen2020,OKane2022, BatteryParameters, PowerStep,CurrentStep, DriveStep,RestStep,ChargeStep, SingleCellPack, MultiCellPack, Experiment, simulate
+export SPMe, Chen2020, OKane2022, BatteryParameters, PowerStep,CurrentStep, DriveStep,RestStep,ChargeStep, SingleCellPack, MultiCellPack, Experiment, simulate
 
 end  # module BatteryPeck
