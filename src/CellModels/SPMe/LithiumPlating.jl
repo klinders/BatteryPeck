@@ -39,6 +39,8 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
         c_dead_x(t)
         j_stripping_x(t)
         ϕf_x(t)
+
+        Q_loss(t)
     end
 
     eqns = [
@@ -52,6 +54,7 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
         c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
         c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
         j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
+        Q_loss ~ 0
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
@@ -82,6 +85,7 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
     α_stripping = 1 - α_plating
     k_plating = 1e-9
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
+    Vk = 0.065*1.58*g.el.Ls[1] # Volume of electrode
 
     j_strip0 = F*k_plating*1000
 
@@ -106,6 +110,9 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
         ϕf_x(t)
         η_plating_x(t)
         η_stripping_x(t)
+        Q_plating(t)
+        Q_dead(t)
+        Q_loss(t)
     end
     
     eqns = [
@@ -130,6 +137,9 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
         L_dead_x ~ sum([L_dead[i] for i in 1:N])/N,
         η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
         η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
+        Q_plating ~ c_plating_x*Vk*F/3600,
+        Q_dead ~ c_dead_x*Vk*F/3600,
+        Q_loss ~ Q_plating + Q_dead
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
@@ -161,6 +171,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     α_stripping = 1 - α_plating
     k_plating = 1e-9
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
+    Vk = 0.065*1.58*g.el.Ls[1] # Volume of electrode
 
     j_strip0 = F*k_plating*1000
     
@@ -185,6 +196,10 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         ϕf_x(t)
         η_plating_x(t)
         η_stripping_x(t)
+        
+        Q_plating(t)
+        Q_dead(t)
+        Q_loss(t)
     end
 
     γ₀ = 1e-6
@@ -217,6 +232,10 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         L_dead_x ~ sum([L_dead[i] for i in 1:N])/N,
         η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
         η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
+        
+        Q_plating ~ c_plating_x*Vk*F/3600,
+        Q_dead ~ c_dead_x*Vk*F/3600,
+        Q_loss ~ Q_plating + Q_dead
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ, L_sei])

@@ -22,15 +22,13 @@ function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolk
 
     # Time derivative operator
     Dt = Differential(t)
-
-    scale = p.Lf₀/p.V̄*s.aₖ
     
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = scale
+        (c_sei(t))[1:N] = 0
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
-        (L_sei(t))[1:N] = p.Lf₀
+        (L_sei(t))[1:N] = 0
 
         c_sei_x(t)
         L_sei_x(t)
@@ -52,7 +50,9 @@ function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolk
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N
+        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        Q_sei ~ 0,
+
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ])
@@ -76,8 +76,6 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
 
     # Time derivative operator
     Dt = Differential(t)
-
-    scale = p.Lf₀/p.V̄*s.aₖ
     
     @variables begin
         # SEI concentration
@@ -90,10 +88,12 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
         L_sei_x(t)
         j_sei_x(t)
         ϕf_x(t)
+        Q_sei(t)
     end
 
     η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
-    
+    c_sei₀ = p.Lf₀/p.V̄*s.aₖ
+
     eqns = [
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
@@ -106,7 +106,8 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N
+        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        Q_sei ~ (c_sei_x-c_sei₀)*p.V̄*p.z*F/3600,
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ])
@@ -130,11 +131,15 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
     # Time derivative operator
     Dt = Differential(t)
 
-    scale = p.Lf₀/p.V̄*s.aₖ
+    c_sei₀ = p.Lf₀/p.V̄*s.aₖ
+    Hcc = 0.065
+    Wcc = 1.58
     
+    Vk = Hcc*Wcc*g.el.Ls[1] # Volume of SEI 
+
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = scale
+        (c_sei(t))[1:N] = c_sei₀
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -143,9 +148,8 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         L_sei_x(t)
         j_sei_x(t)
         ϕf_x(t)
+        Q_loss(t)
     end
-
-    η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
     
     eqns = [
         # Scott Marquis thesis (eq. 5.92)
@@ -159,7 +163,9 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N
+        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        Q_loss ~ (c_sei_x-c_sei₀)*Vk*p.z*F/3600,
+
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ])

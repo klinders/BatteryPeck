@@ -74,6 +74,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ϕ̄ₚ(t)
         aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
         aₚ(t)
+        Q_loss(t)
 
         #temp
         j_tot_ne(t)
@@ -186,6 +187,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
         [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
 
+        Q_loss ~ sei.Q_loss + plating.Q_loss
 
     ]
 
