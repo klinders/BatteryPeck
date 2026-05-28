@@ -9,15 +9,20 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
 
     time_scale, time_unit, time_symbol = format_time(experiment.tend)
 
-    print("Simulating for: $(experiment.tend*time_scale) $(time_unit)\n")
+    print("Simulating for: $(round(experiment.tend*time_scale,digits=2)) $(time_unit)\n")
     
     # Update integrator after every experiment step and print time and voltage at each step
     for (i, step) in ProgressBar(enumerate(experiment.steps))
 
-        step!(integrator, sys, step)
-        
-        println(integrator.sol.retcode)
-        
+        # add the start time if the step wants it
+        if hasproperty(step, :t_start)
+            t_start = experiment.start_time + Second(integrator.t)
+            step!(integrator, sys, step, t_start)
+        else
+            step!(integrator, sys, step)
+        end
+
+                
         # Check if battery hit safety limit
         if integrator.sol.retcode != SciMLBase.ReturnCode.Success
             println("[!] Simulation aborted at t = $(integrator.t)s. Stopping experiment early.")

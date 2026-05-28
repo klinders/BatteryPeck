@@ -100,8 +100,8 @@ struct Experiment
     tend::Float64
     step_count::Int64
     p0::Float64
-    start_time::Date
-    Experiment(steps::Vector{T} where T<:Step, start_time::Date=Date(2020, 1, 1)) = begin
+    start_time::DateTime
+    Experiment(steps::Vector{T} where T<:Step, start_time::DateTime=DateTime(2020, 1, 1)) = begin
         tstops = cumsum([s.period for s in steps])
         tend = tstops[end]
         # Remove the last Tstop since it is the end of the simulation
