@@ -44,4 +44,5 @@ makedocs(
 
 deploydocs(
     repo = "github.com/klinders/BatteryToolkit.git",
+    devbranch = "dev"
 )
