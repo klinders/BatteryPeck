@@ -67,7 +67,34 @@ e = ElectrolyteParameters(
 )
 
 
+"""
+    OKane2022()
 
+Create a battery parameter set based on O'Kane et al. 2022.
+
+Returns a BatteryParameters object with parameters for a high-fidelity graphite/NMC
+lithium-ion battery cell. These parameters are derived from extensive electrochemical
+characterization and are suitable for detailed electrochemical simulations.
+
+# Features
+- Graphite negative electrode with SEI side reaction
+- NMC positive electrode without side reactions
+- High-precision electrolyte parameters
+- Consistent with PyBaMM (Python Battery Mathematical Modelling) standard parameters
+- Cell capacity: 5 Ah nominal
+
+# Returns
+- `BatteryParameters` object ready for use with `SPMe()` cell models
+
+# Example
+```julia
+params = OKane2022()
+sys = SPMe(params=params, N=10)  # 10 FVM nodes per domain
+```
+
+# References
+See O'Kane et al. 2022 for detailed electrochemical characterization and model validation.
+"""
 function OKane2022()
     return BatteryParameters(
         p = p,

@@ -1,5 +1,33 @@
 using ModelingToolkit
 
+"""
+    Electrolyte(; name, p::ElectrolyteParameters, g)
+
+Create a ModelingToolkit system for electrolyte salt concentration and ionic transport.
+
+Models lithium-ion transport through the electrolyte including diffusion in negative electrode,
+separator, and positive electrode. Computes concentration profiles and electrochemical potentials.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::ElectrolyteParameters`: Electrolyte material and transport parameters
+- `g`: FVM geometry object defining domain and node locations
+
+# Input Ports
+- `i_app`: Applied current density (A/m²)
+- `T`: Temperature (K)
+- `Δϕₙ`: Potential drop in negative electrode (V)
+- `ϕₛn`: Solid potential in negative electrode (V)
+
+# Output Variables
+- `cₑ`: Electrolyte concentration profile (mol/m³)
+- `c̄ₑ`: Average electrolyte concentration (mol/m³)
+- `ϕₑ`: Electrolyte potential profile (V)
+
+# Notes
+Uses finite volume method with Bruggeman correlation for tortuosity in porous media.
+Automatically computes diffusion and migration based on concentration gradients.
+"""
 function Electrolyte(;name, p::ElectrolyteParameters, g)
     @parameters begin
         t # Time variable

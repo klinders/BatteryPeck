@@ -1,5 +1,31 @@
 using ModelingToolkit
 
+"""
+    SolidParticle(; name, p::SolidParticleParameters, g)
+
+Create a ModelingToolkit system for solid-state lithium diffusion in a battery electrode.
+
+Models radial diffusion of lithium ions within spherical electrode particles using the finite
+volume method. Computes surface concentration, stoichiometry, and open-circuit potential.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SolidParticleParameters`: Electrode material parameters
+- `g`: FVM geometry object with node locations and volumes
+
+# Input Ports
+- `J`: Surface current density (A/m²)
+- `T`: Temperature (K)
+
+# Output Variables
+- `c`: Concentration profile across particles (mol/m³)
+- `c_surf`: Surface lithium concentration (mol/m³)
+- `z`: Stoichiometry = c_surf/c_max
+- `U₀`: Open-circuit potential (V)
+
+# Notes
+Uses second-order accurate finite volume discretization with ghost nodes for boundary conditions.
+"""
 function SolidParticle(; name, p::SolidParticleParameters, g)
     
     @parameters begin

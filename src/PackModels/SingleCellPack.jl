@@ -2,6 +2,33 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+"""
+    SingleCellPack(; name, params=Chen2020(), config=(96,3), Qcell=5)
+
+Create a single battery cell pack with configurable series/parallel arrangement.
+
+Builds a ModelingToolkit system representing a battery pack of series-parallel connected cells.
+Each cell is modeled using the SPMe (Single Particle Model with Electrolyte) framework.
+
+# Keyword Arguments
+- `name`: System name for ModelingToolkit (required)
+- `params::BatteryParameters`: Parameter set for the cell model (default: Chen2020 parameters)
+- `config::Tuple{Int,Int}`: Series and parallel configuration, `(n_series, n_parallel)` (default: 96 series, 3 parallel)
+- `Qcell::Float64`: Nominal cell capacity in Ah (default: 5 Ah)
+
+# Returns
+- ModelingToolkit system with inputs (Pin, Iin, Tin) and outputs (V, I)
+
+# Input/Output Signals
+- Inputs: `Pin` (power), `Iin` (current), `Tin` (temperature)
+- Outputs: `V` (voltage), `I` (current)
+
+# Example
+```julia
+params = OKane2022()
+pack = SingleCellPack(name=:pack, params=params, config=(96,3), Qcell=5)
+```
+"""
 function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
 
     @parameters begin

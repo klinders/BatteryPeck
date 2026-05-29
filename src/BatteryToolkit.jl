@@ -18,7 +18,7 @@ export SPMe
 
 include("experiment.jl")
 
-export Experiment,AbstractStep,PowerStep,CurrentStep,DriveStep,RestStep,ChargeStep,step!
+export Experiment,AbstractStep,PowerStep,CurrentStep,DriveStep,RestStep,ChargeStep,step!, get_p0
 
 include("solvers.jl")
 include("PackModels/SingleCellPack.jl")

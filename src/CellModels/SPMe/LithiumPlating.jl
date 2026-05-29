@@ -5,6 +5,25 @@ using BatteryToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+"""
+    NoPlating(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create a zero lithium plating model (reaction disabled).
+
+Returns a ModelingToolkit system where lithium plating is disabled. Use this when lithium
+plating effects are negligible or you want to exclude them from the simulation.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: Lithium plating reaction parameters (unused)
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Output Variables
+- `c_plating`: Plated lithium concentration (always 0)
+- `c_dead`: Dead lithium concentration (always 0)
+- `j_stripping`: Lithium stripping current (always 0)
+"""
 function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
@@ -60,6 +79,32 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
 end
 
+"""
+    IrreversiblePlating(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create an irreversible lithium plating model.
+
+Models lithium plating where all plated lithium becomes "dead" (electrochemically inactive).
+Once plated, lithium cannot be stripped (reversed). Use for conservative simulations where
+plating is the primary failure mechanism.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: Lithium plating reaction parameters
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Key Physics
+- Plating occurs when surface potential drops too low (overpotential driven)
+- All plated lithium irreversibly becomes dead lithium
+- Dead lithium consumes cyclable lithium inventory
+- Stripping current is zero (irreversible assumption)
+
+# Output Variables
+- `c_plating`: Active plated lithium (accumulates until fully dead)
+- `c_dead`: Dead lithium (irreversibly lost from battery)
+- `j_stripping`: Always zero (no reversibility)
+"""
 function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
@@ -145,6 +190,36 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
     System(eqns,t; name=name,systems=[J, T, Δϕₛ,η_sei, aₖ, cₑ])
 end
 
+"""
+    PartiallyReversiblePlating(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create a partially reversible lithium plating model.
+
+Models lithium plating where a fraction of plated lithium can be stripped (reversed) during
+charging, but some becomes dead due to structural damage or electrolyte reactions.
+Use for realistic simulations where partial reversibility and cycling damage occur.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: Lithium plating reaction and reversibility parameters
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Key Physics
+- Plating occurs during overdischarge (high negative overpotential)
+- Stripping (reversal) occurs during charging with kinetic limitations
+- Some plated lithium irreversibly becomes dead due to cycling stress
+- Dead lithium fraction accumulates with plating/stripping cycles
+
+# Output Variables
+- `c_plating`: Active plated lithium (can grow or shrink with cycling)
+- `c_dead`: Dead lithium (irreversibly lost, increases over time)
+- `j_stripping`: Stripping current (depends on plating thickness and potential)
+
+# Cycling Behavior
+Repeated plating/stripping cycles increase dead lithium fraction, modeling accelerated
+degradation under abuse conditions.
+"""
 function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin

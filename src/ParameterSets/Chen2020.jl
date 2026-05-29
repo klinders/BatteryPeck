@@ -67,7 +67,33 @@ e = ElectrolyteParameters(
 )
 
 
+"""
+    Chen2020()
 
+Create a battery parameter set based on Chen et al. 2020.
+
+Returns a BatteryParameters object with parameters for a pouch-type lithium-ion battery
+cell using graphite negative electrode and NMC positive electrode. These parameters are
+calibrated from experimental data and are suitable for general lithium-ion battery simulation.
+
+# Features
+- Graphite negative electrode with SEI side reaction
+- NMC positive electrode without side reactions
+- Typical electrolyte composition parameters
+- Cell capacity: 5 Ah nominal
+
+# Returns
+- `BatteryParameters` object ready for use with `SPMe()` cell models
+
+# Example
+```julia
+params = Chen2020()
+sys = SPMe(params=params)
+```
+
+# References
+See Chen et al. 2020 in battery literature for detailed parameter derivation.
+"""
 function Chen2020()
     return BatteryParameters(
         p = p,

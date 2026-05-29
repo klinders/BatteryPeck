@@ -5,6 +5,25 @@ using BatteryToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+"""
+    NoSEI(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create a zero SEI growth model (reaction disabled).
+
+Returns a ModelingToolkit system where SEI film thickness remains zero and provides no ohmic resistance.
+Use this when SEI growth effects are negligible or you want to exclude them from the simulation.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: SEI reaction parameters (unused in this model)
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Output Variables
+- `L_sei`: SEI film thickness (always 0)
+- `j_sei`: SEI current density (always 0)
+- `ϕf`: Film potential (always 0)
+"""
 function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
@@ -59,6 +78,34 @@ function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolk
 end
 
 
+"""
+    ReactionLimitedSEI(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create a reaction-limited SEI growth model.
+
+Models SEI film formation with reaction kinetics controlled by surface overpotential.
+The SEI current density follows Butler-Volmer kinetics. Use when SEI growth is fast
+(high overpotential) and film diffusion resistance is negligible.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: SEI reaction kinetic parameters
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Key Parameters Used
+- `p.j_sei₀`: Exchange current density (A/m²)
+- `p.α`: Transfer coefficient (charge transfer kinetics)
+- `p.U`: SEI formation potential (V vs Li/Li⁺)
+
+# Output Variables
+- `L_sei`: SEI film thickness (grows over time)
+- `j_sei`: SEI current density (determined by kinetics)
+- `ϕf`: Film potential (typically small)
+
+# Physical Assumption
+Reaction rate dominates over diffusion; film acts as perfect ionic conductor.
+"""
 function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
@@ -113,6 +160,35 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ])
 end
 
+"""
+    SolventDiffusionLimitedSEI(; name, p::SideReactionParameters, s::SolidParticleParameters, g)
+
+Create a solvent-diffusion-limited SEI growth model.
+
+Models SEI film formation limited by solvent diffusion through the growing film.
+The SEI current density decreases as the film thickens due to increasing ionic resistance
+and decreasing solvent diffusion. Use when film resistance dominates over reaction kinetics.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::SideReactionParameters`: SEI reaction and film transport parameters
+- `s::SolidParticleParameters`: Electrode solid particle parameters
+- `g`: FVM geometry object
+
+# Key Parameters Used
+- `p.D_sol`: Solvent diffusivity in film (m²/s)
+- `p.c_sol`: Solvent concentration (mol/m³)
+- `p.U`: SEI formation potential (V vs Li/Li⁺)
+- `p.R`: Film resistivity (Ω·m)
+
+# Output Variables
+- `L_sei`: SEI film thickness (grows over time, asymptotically)
+- `j_sei`: SEI current density (decreases as L_sei increases)
+- `ϕf`: Film potential drop (increases with thickness)
+
+# Physical Assumption
+Film diffusion resistance and potential drop dominate; SEI growth self-limits via thickness.
+"""
 function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
     
     @parameters begin
