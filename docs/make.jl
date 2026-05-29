@@ -8,10 +8,11 @@ bib = CitationBibliography(
 makedocs(
     modules=[BatteryToolkit],
     authors="Koen Linders",
-    sitename="BatteryToolkit.jl";
+    sitename="BatteryToolkit.jl",
+    checkdocs=:all,
     format = DocumenterVitepress.MarkdownVitepress(
         repo = "github.com/klinders/BatteryToolkit",
-        devbranch = "main",
+        devbranch = "dev",
         devurl = "dev",
     ),
     plugins=[bib],
