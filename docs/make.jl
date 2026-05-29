@@ -44,7 +44,6 @@ makedocs(
 
 DocumenterVitepress.deploydocs(;
     repo = "github.com/klinders/BatteryToolkit",
-    target = joinpath(@__DIR__, "build"),
     branch = "gh-pages",
     devbranch = "dev",
     push_preview = true,
