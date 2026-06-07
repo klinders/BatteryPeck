@@ -226,11 +226,16 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         ϕf_x(t)
         Q_loss(t)
     end
+
+    # All SEI growth mechanisms assumed to have Arrhenius dependence
+    arrhenius = exp(
+        p.E_sei / R * (1 / p.T_ref - 1 / T.u)
+    )
     
     eqns = [
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        [j_sei[i] ~ -p.D_sol*p.c_sol*F/L_sei[i] for i in 1:N]...,
+        [j_sei[i] ~ -p.D_sol*p.c_sol*F/L_sei[i]*arrhenius for i in 1:N]...,
 
         [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,

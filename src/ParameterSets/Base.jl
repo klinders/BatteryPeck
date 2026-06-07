@@ -75,6 +75,8 @@ Base.@kwdef mutable struct SideReactionParameters
     c::Function     # Concentration dependence function
     D_sol           # Solvent diffusivity in m^2/s
     c_sol           # Solvent concentration in mol/m^3
+    E_sei           # Activation energy for SEI growth in J/mol
+    T_ref           # Reference temperature in K
 end
 
 """

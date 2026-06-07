@@ -16,6 +16,8 @@ sei_parameters = SideReactionParameters(
     c = (el) -> nothing, # Concentration dependence function
     D_sol = 2.5e-22, # Solvent diffusivity in m^2/s
     c_sol = 2636.0, # Solvent concentration in mol/m^3
+    E_sei = 38000.0, # Activation energy for SEI growth in J/mol
+    T_ref = 298.15 # Reference temperature in K
 )
 
 n = SolidParticleParameters(

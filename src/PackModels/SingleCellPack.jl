@@ -29,7 +29,7 @@ params = OKane2022()
 pack = SingleCellPack(name=:pack, params=params, config=(96,3), Qcell=5)
 ```
 """
-function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
+function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.15)
 
     @parameters begin
         t # Time variable
@@ -40,7 +40,7 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
     @variables begin 
         Pin(t)=0, [input=true]
         Iin(t)=0, [input=true]
-        Tin(t)=298.15, [input=true]
+        Tin(t)=T, [input=true]
         V(t)
         I(t)
     end
@@ -48,7 +48,7 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5)
     @named cell = SPMe(params=params, Q=Qcell) # Battery cell model
     @named power = RealInput(guess=0)
     @named current = RealInput(guess=0)
-    @named temp = RealInput(guess=298.15)
+    @named temp = RealInput(guess=T)
     @named source = Current()
     @named ground = Ground()
 
