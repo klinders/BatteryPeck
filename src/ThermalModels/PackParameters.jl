@@ -1,6 +1,14 @@
 # ==============================================================================
 # PackParameters.jl
 # Define thermophysical properties, boundary conditions, and geometric constants
+# Contains:
+# 1. FluidProperties: Contain constant thermophysical properties for single-phase coolant fluid
+# 2. SolidProperties: Contain constant thermophysical properties for solid pack materials
+# 3. TMSGeometry: Contain cross-sectional dimensions of cooling ribbon for hydraulic calculations
+# 4. PackParameters: Store environmental boundaries, geometries, and materials in master dictionary
+# 5. get_coolant_properties: Return baseline fluid properties evaluated at nominal 25°C
+# 6. get_solid_properties: Return baseline thermophysical properties for standard pack materials
+# 7. build_pack_parameters: Generate full parameter set with standard defaults via convenience constructor
 # ==============================================================================
 
 export FluidProperties, SolidProperties, TMSGeometry, PackParameters
@@ -9,89 +17,79 @@ export get_coolant_properties, get_solid_properties
 """
     FluidProperties
 
-Contains constant thermophysical properties for single-phase coolant fluid.
+Contain constant thermophysical properties for single-phase coolant fluid.
 """
 Base.@kwdef struct FluidProperties
-    # Define fluid density
+    # Define fluid thermophysical properties
     density::Float64
-    # Define specific heat capacity
     specific_heat::Float64
-    # Define thermal conductivity
     thermal_conductivity::Float64
-    # Define dynamic viscosity
     dynamic_viscosity::Float64
 end
 
 """
     SolidProperties
 
-Contains constant thermophysical properties for solid pack materials.
+Contain constant thermophysical properties for solid pack materials.
 """
 Base.@kwdef struct SolidProperties
-    # Define solid density
+    # Define solid thermophysical properties
     density::Float64
-    # Define specific heat capacity
     specific_heat::Float64
-    # Define thermal conductivity
     thermal_conductivity::Float64
 end
 
 """
     TMSGeometry
 
-Contains cross-sectional dimensions of cooling ribbon for hydraulic calculations.
+Contain cross-sectional dimensions of cooling ribbon for hydraulic calculations.
 """
 Base.@kwdef struct TMSGeometry
-    # Set internal channel width
+    # Define internal channel dimensions and pipe wall thickness
     channel_width::Float64
-    # Set internal channel height
     channel_height::Float64
-    # Define quantity of parallel flow channels
     number_of_channels::Int
-    # Set thickness of enclosing pipe wall
     wall_thickness::Float64
 end
 
 """
     PackParameters
 
-Master dictionary containing environmental boundaries, geometries, and materials.
+Store environmental boundaries, geometries, and materials in master dictionary.
 """
 Base.@kwdef struct PackParameters
-    # Assign fluid properties
+    # Assign material properties and channel dimensions
     fluid::FluidProperties
-    # Assign pipe wall properties
     pipe_wall::SolidProperties
-    # Assign thermal potting properties
     potting_material::SolidProperties
-    # Assign outer casing properties
     casing_material::SolidProperties
-    # Assign cooling channel dimensions
     tms_geometry::TMSGeometry
     
-    # Set physical gap between adjacent cells
+    # Set physical gap and casing thicknesses
     cell_gap_thickness::Float64
-    # Set thickness of potting material at cell base
     axial_potting_thickness::Float64
-    # Set thickness of outer pack casing
     casing_thickness::Float64
     
-    # Set ambient environmental temperature
+    # Set environmental temperatures and flow boundaries
     ambient_temperature::Float64
-    # Set coolant inlet temperature
     inlet_temperature::Float64
-    # Set total coolant mass flow rate
     mass_flow_rate::Float64
-    # Set convective heat transfer coefficient for outer casing
     ambient_convection_coefficient::Float64
 end
 
 """
     get_coolant_properties(coolant_type::Symbol)
 
-Returns baseline fluid properties evaluated at nominal 25°C.
+Return baseline fluid properties evaluated at nominal 25°C.
+
+# Arguments
+- `coolant_type::Symbol`: Identifier for desired coolant fluid
+
+# Returns
+- Instantiated FluidProperties struct
 """
 function get_coolant_properties(coolant_type::Symbol)
+    # Evaluate and return properties based on specified coolant type
     if coolant_type == :water_glycol
         # 50/50 volume ethylene glycol and water mixture at 25°C
         # Source: 2001 ASHRAE Fundamentals Handbook (SI), Chapter 21
@@ -127,9 +125,16 @@ end
 """
     get_solid_properties(material_type::Symbol)
 
-Returns baseline thermophysical properties for standard pack materials.
+Return baseline thermophysical properties for standard pack materials.
+
+# Arguments
+- `material_type::Symbol`: Identifier for desired solid material
+
+# Returns
+- Instantiated SolidProperties struct
 """
 function get_solid_properties(material_type::Symbol)
+    # Evaluate and return properties based on specified solid material
     if material_type == :aluminium_6061
         # Alloy 6061 properties
         # Source: Bohler Uddeholm Aluminium 6061 Data Sheet
@@ -160,9 +165,9 @@ function get_solid_properties(material_type::Symbol)
 end
 
 """
-    build_pack_parameters(; kwargs...)
+    build_pack_parameters(; coolant=:water_nema2026, ambient_temp=298.15, inlet_temp=298.15, flow_rate=0.02994, cell_pitch=0.025, cell_diameter=0.021)
 
-Convenience constructor for generating full parameter set with standard defaults.
+Generate full parameter set with standard defaults via convenience constructor.
 
 Editable values:
 `coolant`: Alters fluid properties dictionary.
@@ -171,6 +176,17 @@ Editable values:
 `flow_rate`: Adjusts global mass flow rate.
 `cell_pitch`: Changes physical spacing between cell centres.
 `cell_diameter`: Adjusts active cell diameter for gap calculations.
+
+# Arguments
+- `coolant::Symbol`: Identifier for desired coolant fluid
+- `ambient_temp::Float64`: Environmental baseline temperature
+- `inlet_temp::Float64`: Fluid entry temperature
+- `flow_rate::Float64`: Global mass flow rate
+- `cell_pitch::Float64`: Physical spacing between cell centres
+- `cell_diameter::Float64`: Active cell diameter
+
+# Returns
+- Instantiated PackParameters master dictionary
 """
 function build_pack_parameters(;
         coolant::Symbol = :water_nema2026,

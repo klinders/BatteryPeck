@@ -4,6 +4,9 @@
 # 1D Core-Shell Lumped Parameter Thermal Network (LPTN) for the LGM50
 # Based on experimental dataset by O'Regan et al. (2022)[1]:
 # https://doi.org/10.1016/j.electacta.2022.140700
+# Contains:
+# 1. TemperatureDependentJellyroll: Generate temperature-dependent jellyroll component
+# 2. CoreShellCell: Generate core-shell LPTN architecture component
 # =====================================================================================================================
 
 using ModelingToolkit
@@ -13,7 +16,9 @@ using ModelingToolkitStandardLibrary.Blocks
 """
     TemperatureDependentJellyroll(; name, m_jelly=0.05708, T_start=300)
 
-Temperature-dependent jellyroll component containing heat source, thermal resistances, and thermal capacitance.
+Generate temperature-dependent jellyroll component.
+
+Contains heat source, thermal resistances, and thermal capacitance.
 
 Equations:
 Specific heat (C_p) uses third-order polynomials for constituent materials.
@@ -22,8 +27,17 @@ Heat capacity dynamics: dT/dt = Q_flow / (mass * C_p)
 Editable values:
 `m_jelly`: Alters total mass of jellyroll, affecting thermal inertia.
 `T_start`: Sets initial thermal state.
+
+# Arguments
+- `name`: Component name for ModelingToolkit
+- `m_jelly`: Total mass of jellyroll
+- `T_start`: Initial temperature
+
+# Returns
+- Instantiated TemperatureDependentJellyroll component system
 """
 @component function TemperatureDependentJellyroll(; name, m_jelly=0.05708, T_start=300)
+    # Instantiate thermal port and declare required parameters and variables
     @named port = HeatPort()
     
     @parameters begin
@@ -38,9 +52,10 @@ Editable values:
     
     D = Differential(t)
     
-    # Specific heat equations
+    # Formulate specific heat capacity using constituent material polynomials and apply heat capacity dynamics
     # Mass fractions calculated from (Tab. 4)[1]
     # Third-order polynomials from (Tab. S4)[1]
+    # MTK thermal convention: port.Q is heat flowing INTO component
     eqs = [
         T ~ port.T,
         
@@ -53,8 +68,6 @@ Editable values:
             0.0666 * 229.0                                                # Electrolyte (Tab. 7)[1]
         ),
         
-        # Heat capacity dynamics (Q = m * c_p * dT/dt)
-        # MTK thermal convention: port.Q is heat flowing INTO component
         D(T) ~ port.Q_flow / (mass * C_p)
     ]
     
@@ -64,7 +77,8 @@ end
 """
     CoreShellCell(; name, T_start=298.15)
 
-Core-shell LPTN architecture component.
+Generate core-shell LPTN architecture component.
+
 Models internal radial and axial heat transfer pathways.
 
 Equations:
@@ -73,8 +87,16 @@ Lumped average-mass node: R = 1 / (8 * pi * L * k)
 
 Editable values:
 `T_start`: Sets initial boundary temperature.
+
+# Arguments
+- `name`: Component name for ModelingToolkit
+- `T_start`: Initial boundary temperature
+
+# Returns
+- Instantiated CoreShellCell component system
 """
 @component function CoreShellCell(; name, T_start=298.15)
+    # Define physical parameters and thermal properties for core and shell
     @parameters begin
         t
         
@@ -99,38 +121,30 @@ Editable values:
         C_shell_val = 5.075 
     end
     
-    # Instantiate nodes
+    # Instantiate internal thermal nodes, pathways, and external interfaces
     @named core_cap = TemperatureDependentJellyroll(T_start=T_start)
     @named shell_cap = HeatCapacitor(C=C_shell_val, T=T_start)
     
-    # Instantiate internal pathways
     @named R_rad = ThermalResistor(R=R_rad_val)
     @named R_ax = ThermalResistor(R=R_ax_val)
     
-    # Instantiate heat source interface
     @named heat_source = PrescribedHeatFlow()
     @named Q_volumetric_in = RealInput()
     
-    # Absolute outer surface of cell
     @named port_shell = HeatPort()
     
+    # Formulate routing connections between heat source, internal nodes, and shell boundary
     eqs = [
-        # Convert volumetric heat (W/m^3) to absolute heat (W)
         heat_source.Q_flow.u ~ Q_volumetric_in.u * V_jellyroll,
         
-        # Inject generated heat directly into core node
         connect(heat_source.port, core_cap.port),
         
-        # Connect core to shell via radial pathway
         connect(core_cap.port, R_rad.port_a),
         connect(R_rad.port_b, port_shell),
         
-        # Connect core to shell via axial pathway (parallel to radial)
         connect(core_cap.port, R_ax.port_a),
         connect(R_ax.port_b, port_shell),
         
-        # Attach shell thermal mass to outer node 
-        # Implicitly connects it to thermal ground
         connect(port_shell, shell_cap.port)
     ]
     

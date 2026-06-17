@@ -1,167 +1,190 @@
 # ==============================================================================
 # TMSControl.jl
-# Anticipative and reactive control logic for thermal management system
+# Pure Julia evaluation functions for Battery Thermal Management System logic
+# Contains:
+# 1. velocity_to_mass_flow: Convert coolant velocity to mass flow rate
+# 2. get_future_load_avg: Calculate average expected current load over future time window
+# 3. get_lookahead: Retrieve lookahead window duration for specific thermal management strategy
+# 4. evaluate_tms_state: Determine active or passive cooling state based on current conditions
 # ==============================================================================
-export velocity_to_mass_flow, get_max_cell_temp, get_future_power_avg
-export build_baseline_callback, build_anticipative_callback
 
-using ModelingToolkit
-using SciMLBase
-using DiffEqCallbacks
+export velocity_to_mass_flow, get_future_load_avg
+export TMSStrategy, ReactiveTMS, AnticipativeTMS, evaluate_tms_state, get_lookahead
 
 """
-    velocity_to_mass_flow(v, rho, A_c)
+    TMSStrategy
+
+Abstract base type for thermal management system control logic.
+"""
+abstract type TMSStrategy end
+
+"""
+    velocity_to_mass_flow(v::Float64, rho::Float64, A_c::Float64)
 
 Convert coolant velocity to mass flow rate.
+
+Multiplies velocity by fluid density and cross sectional area.
+
+# Arguments
+- `v::Float64`: Coolant flow velocity
+- `rho::Float64`: Coolant fluid density
+- `A_c::Float64`: Cross sectional area of cooling channel
+
+# Returns
+- Calculated mass flow rate
 """
 function velocity_to_mass_flow(v::Float64, rho::Float64, A_c::Float64)
     return rho * A_c * v
 end
 
 """
-    get_max_cell_temp(integrator, thermal_sys, num_cells)
+    get_future_load_avg(current_t::Float64, get_load_func::Function, window_size::Float64, v_pack::Float64, soc::Float64, samples::Int=10)
 
-Extract maximum core temperature across all cells.
+Calculate average expected current load over future time window.
+
+Iterates through future time steps and queries load function. Averages absolute current magnitude across sampled points.
+
+# Arguments
+- `current_t::Float64`: Current simulation time
+- `get_load_func::Function`: Function returning expected load current
+- `window_size::Float64`: Duration to look ahead
+- `v_pack::Float64`: Current pack voltage
+- `soc::Float64`: Current state of charge
+- `samples::Int`: Number of points to sample within window
+
+# Returns
+- Average absolute current load
 """
-function get_max_cell_temp(integrator, thermal_sys, num_cells::Int)
-    temps = [integrator[getproperty(thermal_sys, Symbol("cell_$i")).core_cap.T] for i in 1:num_cells]
-    return maximum(temps)
+function get_future_load_avg(current_t::Float64, get_load_func::Function, window_size::Float64, v_pack::Float64, soc::Float64, samples::Int=10)
+    # Initialise load accumulator and calculate time step size
+    total_load = 0.0
+    dt = window_size / samples
+    
+    # Aggregate absolute load values across future sample points
+    for i in 1:samples
+        total_load += abs(get_load_func(current_t + i*dt, v_pack, soc)[1])
+    end
+    
+    return total_load / samples
 end
 
 """
-    get_future_power_avg(t_current, steps, window_size)
+    ReactiveTMS(; T_high=35.0, T_low=32.0, T_coolant_passive=298.15, T_coolant_active=288.15)
 
-Calculate exact time-weighted average of future load using step periods.
+Define reactive thermal management strategy parameters.
+
+Triggers active cooling only when maximum temperature exceeds high threshold. Reverts to passive cooling when temperature drops below low threshold.
 """
-function get_future_power_avg(t_current::Float64, steps, window_size::Float64)
-    t_end_window = t_current + window_size
-    total_energy = 0.0
-    
-    t_step_start = 0.0
-    for step in steps
-        t_step_end = t_step_start + step.period
-        
-        if t_step_end > t_current && t_step_start < t_end_window
-            overlap_start = max(t_current, t_step_start)
-            overlap_end = min(t_end_window, t_step_end)
-            overlap_duration = overlap_end - overlap_start
-            
-            val = 0.0
-            if hasproperty(step, :value)
-                val = abs(step.value)
-            end
-            
-            total_energy += val * overlap_duration
-        end
-        
-        t_step_start = t_step_end
-        if t_step_start >= t_end_window
-            break
-        end
-    end
-    return total_energy / window_size
+Base.@kwdef struct ReactiveTMS <: TMSStrategy
+    T_high::Float64 = 35.0
+    T_low::Float64  = 32.0
+    T_coolant_passive::Float64 = 298.15
+    T_coolant_active::Float64  = 288.15
 end
 
 """
-    build_baseline_callback(thermal_sys, num_cells, m_flow_active, m_flow_passive, T_active, T_passive)
+    AnticipativeTMS(; T_high=35.0, T_low=32.0, cell_load_threshold=7.5, lookahead_window=300.0, T_coolant_passive=298.15, T_coolant_active=288.15)
 
-Construct discrete callback for reactive thermal management.
+Define anticipative thermal management strategy parameters.
+
+Triggers active cooling preemptively based on expected future load or when temperature exceeds high threshold. 
 """
-function build_baseline_callback(thermal_sys, num_cells::Int, m_flow_active::Float64, m_flow_passive::Float64, T_active::Float64=288.15, T_passive::Float64=298.15)
-    
-    # Reference for mechanical cooldown to prevent microsecond double-triggers
-    last_trigger = Ref(-100.0) 
-    
-    function condition(u, t, integrator)
-        if t - last_trigger[] < 5.0 return false end
-        
-        T_max = get_max_cell_temp(integrator, thermal_sys, num_cells)
-        current_flow = integrator.ps[thermal_sys.fluid_inlet.m_flow_in]
-        
-        if T_max > 308.15 && abs(current_flow - m_flow_active) > 1e-6
-            return true
-        elseif T_max < 305.15 && abs(current_flow - m_flow_passive) > 1e-6
-            return true
-        end
-        return false
-    end
-
-    function affect!(integrator)
-        T_max = get_max_cell_temp(integrator, thermal_sys, num_cells)
-        current_flow = integrator.ps[thermal_sys.fluid_inlet.m_flow_in]
-        
-        if T_max > 308.15 && abs(current_flow - m_flow_active) > 1e-6
-            integrator.ps[thermal_sys.fluid_inlet.m_flow_in] = m_flow_active
-            integrator.ps[thermal_sys.fluid_inlet.T_inlet] = T_active
-            last_trigger[] = integrator.t 
-            
-            # Safely update physics without resetting DAE states
-            u_modified!(integrator, false) 
-            println("  [TMS] ACTIVE at t = $(round(integrator.t, digits=1))s | T_max = $(round(T_max - 273.15, digits=2))C")
-            
-        elseif T_max < 305.15 && abs(current_flow - m_flow_passive) > 1e-6
-            integrator.ps[thermal_sys.fluid_inlet.m_flow_in] = m_flow_passive
-            integrator.ps[thermal_sys.fluid_inlet.T_inlet] = T_passive
-            last_trigger[] = integrator.t 
-            
-            # Safely update physics without resetting DAE states
-            u_modified!(integrator, false) 
-            println("  [TMS] PASSIVE at t = $(round(integrator.t, digits=1))s | T_max = $(round(T_max - 273.15, digits=2))C")
-        end
-    end
-
-    return DiscreteCallback(condition, affect!; save_positions=(false, true))
+Base.@kwdef struct AnticipativeTMS <: TMSStrategy
+    T_high::Float64 = 35.0
+    T_low::Float64  = 32.0
+    cell_load_threshold::Float64 = 7.5 
+    lookahead_window::Float64 = 300.0  
+    T_coolant_passive::Float64 = 298.15
+    T_coolant_active::Float64  = 288.15
 end
 
 """
-    build_anticipative_callback(thermal_sys, num_cells, exp_steps, m_flow_active, m_flow_passive, power_threshold, window_size, T_active, T_passive)
+    get_lookahead(strategy)
 
-Construct discrete callback for predictive thermal management.
+Retrieve lookahead window duration for specific thermal management strategy.
+
+Returns zero for reactive strategies to prevent unnecessary CPU load. Returns defined window size for anticipative strategies.
+
+# Arguments
+- `strategy`: Configured thermal management strategy object
+
+# Returns
+- Lookahead time window in seconds
 """
-function build_anticipative_callback(thermal_sys, num_cells::Int, exp_steps, m_flow_active::Float64, m_flow_passive::Float64, power_threshold::Float64, window_size::Float64=300.0, T_active::Float64=288.15, T_passive::Float64=298.15)
-    
-    # Reference for mechanical cooldown to prevent microsecond double-triggers
-    last_trigger = Ref(-100.0)
-    
-    function condition(u, t, integrator)
-        if t - last_trigger[] < 5.0 return false end
-        
-        T_max = get_max_cell_temp(integrator, thermal_sys, num_cells)
-        P_future_avg = get_future_power_avg(integrator.t, exp_steps, window_size)
-        current_flow = integrator.ps[thermal_sys.fluid_inlet.m_flow_in]
-        
-        if (P_future_avg > power_threshold || T_max > 308.15) && abs(current_flow - m_flow_active) > 1e-6
-            return true
-        elseif T_max < 305.15 && P_future_avg <= power_threshold && abs(current_flow - m_flow_passive) > 1e-6
-            return true
-        end
-        return false
-    end
+get_lookahead(::ReactiveTMS) = 0.0
+get_lookahead(s::AnticipativeTMS) = s.lookahead_window
 
-    function affect!(integrator)
-        T_max = get_max_cell_temp(integrator, thermal_sys, num_cells)
-        P_future_avg = get_future_power_avg(integrator.t, exp_steps, window_size)
-        current_flow = integrator.ps[thermal_sys.fluid_inlet.m_flow_in]
-        
-        if (P_future_avg > power_threshold || T_max > 308.15) && abs(current_flow - m_flow_active) > 1e-6
-            integrator.ps[thermal_sys.fluid_inlet.m_flow_in] = m_flow_active
-            integrator.ps[thermal_sys.fluid_inlet.T_inlet] = T_active
-            last_trigger[] = integrator.t
-            
-            # Safely update physics without resetting DAE states
-            u_modified!(integrator, false) 
-            println("  [TMS] Anticipative ACTIVE at t = $(round(integrator.t, digits=1))s")
-            
-        elseif T_max < 305.15 && P_future_avg <= power_threshold && abs(current_flow - m_flow_passive) > 1e-6
-            integrator.ps[thermal_sys.fluid_inlet.m_flow_in] = m_flow_passive
-            integrator.ps[thermal_sys.fluid_inlet.T_inlet] = T_passive
-            last_trigger[] = integrator.t
-            
-            # Safely update physics without resetting DAE states
-            u_modified!(integrator, false) 
-            println("  [TMS] Anticipative PASSIVE at t = $(round(integrator.t, digits=1))s")
+"""
+    evaluate_tms_state(strategy::ReactiveTMS, T_max_C::Float64, cell_future_load::Float64, current_flow::Float64, m_passive::Float64, m_active::Float64)
+
+Determine active or passive cooling state based on reactive logic.
+
+Evaluates current maximum temperature against thresholds to set hysteresis state.
+
+# Arguments
+- `strategy::ReactiveTMS`: Reactive management configuration
+- `T_max_C::Float64`: Current maximum cell temperature
+- `cell_future_load::Float64`: Average expected future load (unused)
+- `current_flow::Float64`: Current coolant mass flow rate
+- `m_passive::Float64`: Passive resting mass flow rate
+- `m_active::Float64`: Active cooling mass flow rate
+
+# Returns
+- Tuple containing target mass flow and target coolant temperature
+"""
+function evaluate_tms_state(strategy::ReactiveTMS, T_max_C::Float64, cell_future_load::Float64, current_flow::Float64, m_passive::Float64, m_active::Float64)
+    # Engage active cooling if maximum temperature exceeds high threshold
+    if T_max_C > strategy.T_high
+        return m_active, strategy.T_coolant_active
+    # Revert to passive cooling if maximum temperature drops below low threshold
+    elseif T_max_C < strategy.T_low
+        return m_passive, strategy.T_coolant_passive
+    # Maintain current hysteresis state if temperature resides between bounds
+    else
+        if current_flow >= (m_active * 0.99)
+            return m_active, strategy.T_coolant_active
+        else
+            return m_passive, strategy.T_coolant_passive
         end
     end
+end
 
-    return DiscreteCallback(condition, affect!; save_positions=(false, true))
+"""
+    evaluate_tms_state(strategy::AnticipativeTMS, T_max_C::Float64, cell_future_load::Float64, current_flow::Float64, m_passive::Float64, m_active::Float64)
+
+Determine active or passive cooling state based on anticipative logic.
+
+Evaluates current temperature and predictive load against configured thresholds.
+
+# Arguments
+- `strategy::AnticipativeTMS`: Anticipative management configuration
+- `T_max_C::Float64`: Current maximum cell temperature
+- `cell_future_load::Float64`: Average expected future load
+- `current_flow::Float64`: Current coolant mass flow rate
+- `m_passive::Float64`: Passive resting mass flow rate
+- `m_active::Float64`: Active cooling mass flow rate
+
+# Returns
+- Tuple containing target mass flow and target coolant temperature
+"""
+function evaluate_tms_state(strategy::AnticipativeTMS, T_max_C::Float64, cell_future_load::Float64, current_flow::Float64, m_passive::Float64, m_active::Float64)
+    # Evaluate temperature and load threshold conditions
+    is_hot = T_max_C > strategy.T_high
+    is_cool = T_max_C < strategy.T_low
+    is_heavy_load = cell_future_load > strategy.cell_load_threshold
+
+    # Engage active cooling if pack is hot or heavy future load is detected
+    if is_hot || is_heavy_load
+        return m_active, strategy.T_coolant_active
+    # Revert to passive cooling if pack is cool and no heavy load is expected
+    elseif is_cool && !is_heavy_load
+        return m_passive, strategy.T_coolant_passive
+    # Maintain current hysteresis state if conditions fall between defined triggers
+    else
+        if current_flow >= (m_active * 0.99) 
+            return m_active, strategy.T_coolant_active
+        else
+            return m_passive, strategy.T_coolant_passive
+        end
+    end
 end

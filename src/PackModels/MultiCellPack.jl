@@ -11,7 +11,7 @@ function MultiCellPack(;name, params=Chen2020(), config=(12,1), Qcell=5)
         t # Time variable
         
         # Define boundary inputs as parameters
-        Pin = 0.0
+        P_in = 0.0
         Iin = 0.0
         Tin = 298.15
     end
@@ -33,7 +33,7 @@ function MultiCellPack(;name, params=Chen2020(), config=(12,1), Qcell=5)
     eqs = [
         V ~ cell[1].p.v - cell[end].n.v
         I ~ cell[1].i
-        power.u ~ Pin
+        power.u ~ P_in
         current.u ~ Iin
         temp.u ~ Tin
 

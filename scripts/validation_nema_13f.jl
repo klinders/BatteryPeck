@@ -8,6 +8,7 @@ using OrdinaryDiffEq
 using DataInterpolations
 using DelimitedFiles
 using Plots
+using Plots.Measures
 using Logging
 
 using Revise
@@ -248,23 +249,30 @@ function run_uniformity_validation(t_hg_end, val_filename)
     # Print calculated R² to console
     println("  -> R²:   $(round(r2, digits=4))")
 
+    # Calculate dynamic relative positions for text annotation (5% left, 85% bottom)
+    y_max = max(maximum(Delta_T_sim), maximum(y_val_delta_T))
+    y_min = min(minimum(Delta_T_sim), minimum(y_val_delta_T))
+    
+    x_pos = 0.05 * t_hg_end
+    y_pos = y_min + 0.85 * (y_max - y_min)
+
     # Initialise plot with simulation data
     plt = plot(
         t_sim, Delta_T_sim, 
-        label="LPTN ΔT", 
-        linewidth=2, color=:purple,
-        xlabel="Time (s)", ylabel="Temperature Difference ΔT (°C)",
-        title="Nema et al. (2026) - Fig 13f (Pack Uniformity)",
-        legend=:bottomright, grid=true
+        label="Sim.", 
+        linewidth=2, color=:blue,
+        xlabel="Time (s)", ylabel="Temperature difference (°C)",
+        title="5C maximum temperature difference",
+        legend=:bottomright, grid=true, margin=8mm
     )
     # Overlay CFD validation data as scatter points
     scatter!(
         plt, t_val, y_val_delta_T, 
-        label="Nema 3D CFD Data", 
-        markershape=:circle, color=:orange, markersize=4, alpha=0.7
+        label="CFD", 
+        markershape=:circle, color=:red, markersize=4, alpha=0.7
     )
-    # Annotate plot with calculated error metrics
-    annotate!(plt, [(t_hg_end*0.1, maximum(y_val_delta_T)*0.95, text("RMSE: $(round(rmse, digits=2)) °C\nR²: $(round(r2, digits=3))", 10, :left))])
+    # Annotate plot with calculated error metrics using dynamic placement
+    annotate!(plt, [(x_pos, y_pos, text("RMSE: $(round(rmse, digits=2)) °C\nR²: $(round(r2, digits=3))", 10, :left))])
     
     # Return completed plot object, solver solution, and cell array
     return plt, sol, cells
@@ -439,6 +447,16 @@ p_uniformity, sol_out, cells_out = run_uniformity_validation(t_hg_5c[end], "13f_
 
 # Display pack uniformity validation plot
 display(p_uniformity)
+
+# Set toggle to automatically export a vector graphics file of the final plot
+export_vector_image = true
+
+# Automatically save a vector version if the toggle is true
+if export_vector_image
+    output_filename = "validation_nema_13f_plot.svg" 
+    savefig(p_uniformity, output_filename)
+    println("Vector image successfully exported to: $output_filename")
+end
 
 # Passes the extracted variables safely into the animation engine
 #animate_pack_temperatures(sol_out, cells_out, geom, "5C_serpentine_gradient.gif")

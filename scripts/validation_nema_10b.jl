@@ -8,6 +8,7 @@ using OrdinaryDiffEq
 using DataInterpolations
 using DelimitedFiles
 using Plots
+using Plots.Measures
 using Logging
 
 using Revise
@@ -176,11 +177,11 @@ function run_velocity_validation(t_hg_end)
     # Define standard MATLAB colour palette
     matlab_colors = ["#0072BD", "#D95319", "#EDB120", "#7E2F8E", "#77AC30", "#4DBEEE", "#A2142F"]
     
-    # Initialise main overview plot
+    # Initialise main overview plot with adjusted Celsius limits and moved legend
     p_main = plot(
-        xlabel="Time (s)", ylabel="Temperature (K)",
-        title="All Velocities Overview",
-        legend=:topleft, grid=true, ylims=(295, 340)
+        xlabel="Time (s)", ylabel="Temperature (°C)",
+        title="Velocity sweep overview",
+        legend=:bottomright, grid=true, ylims=(20, 65)
     )
     
     # Initialise array for individual subplots
@@ -240,43 +241,45 @@ function run_velocity_validation(t_hg_end)
         # Extract cell temperatures in kelvin
         T_cells_K = [sol[cells[j].core_cap.T] for j in 1:num_cells]
         
-        # Find maximum cell temperature at each time step
+        # Find maximum cell temperature at each time step and convert to Celsius
         T_max_sim_K = maximum(hcat(T_cells_K...), dims=2)[:, 1]
+        T_max_sim_C = T_max_sim_K .- 273.15
 
-        # Load validation data from corresponding file
+        # Load validation data from corresponding file and convert to Celsius
         t_val, y_val_K = load_and_preprocess(joinpath(data_dir, csv_files[i]))
+        y_val_C = y_val_K .- 273.15
         
         # Compute error metrics between simulation and validation data
-        rmse, r2 = compute_metrics(sol.t, T_max_sim_K, t_val, y_val_K)
+        rmse, r2 = compute_metrics(sol.t, T_max_sim_C, t_val, y_val_C)
         
         # Print calculated metrics to console
-        println("  -> v = $v m/s  |  RMSE: $(round(rmse, digits=3)) K  |  R²: $(round(r2, digits=4))")
+        println("  -> v = $v m/s  |  RMSE: $(round(rmse, digits=3)) °C  |  R²: $(round(r2, digits=4))")
 
-        # Overlay simulation data on main plot
-        plot!(p_main, sol.t, T_max_sim_K, label="Sim $v m/s", color=matlab_colors[i], linewidth=2)
-        # Overlay CFD validation data on main plot
-        plot!(p_main, t_val, y_val_K, label="CFD $v m/s", color=matlab_colors[i], linestyle=:dash, linewidth=2)
+        # Overlay simulation data on main plot with "Sim."
+        plot!(p_main, sol.t, T_max_sim_C, label="Sim. $v m/s", color=matlab_colors[i], linewidth=2)
+        # Overlay CFD validation data on main plot with "CFD"
+        plot!(p_main, t_val, y_val_C, label="CFD $v m/s", color=matlab_colors[i], linestyle=:dash, linewidth=2)
 
-        # Create dedicated subplot for current velocity
+        # Create dedicated subplot for current velocity with "Sim."
         p_sub = plot(
-            sol.t, T_max_sim_K, 
-            label="LPTN", color=matlab_colors[i], linewidth=2, 
-            title="Velocity = $v m/s", xlabel="Time (s)", ylabel="Temp (K)", 
-            grid=true, ylims=(295, 340), legend=:topleft
+            sol.t, T_max_sim_C, 
+            label="Sim.", color=matlab_colors[i], linewidth=2, 
+            title="Velocity = $v m/s", xlabel="Time (s)", ylabel="Temperature (°C)", 
+            grid=true, ylims=(20, 65), legend=:topleft
         )
         
-        # Overlay validation data on subplot
-        plot!(p_sub, t_val, y_val_K, label="CFD Data", color=matlab_colors[i], linestyle=:dash, linewidth=2)
+        # Overlay validation data on subplot (keeping "CFD data" per your instructions)
+        plot!(p_sub, t_val, y_val_C, label="CFD data", color=matlab_colors[i], linestyle=:dash, linewidth=2)
         
         # Annotate subplot with calculated error metrics
-        annotate!(p_sub, [(t_hg_end * 0.55, 303, text("RMSE: $(round(rmse, digits=2)) K\nR²: $(round(r2, digits=3))", 10, :left))])
+        annotate!(p_sub, [(t_hg_end * 0.55, 30, text("RMSE: $(round(rmse, digits=2)) °C\nR²: $(round(r2, digits=3))", 10, :left))])
         
         # Append completed subplot to array
         push!(sub_plots, p_sub)
     end
     
-    # Compile individual plots into final grid layout
-    plt_final = plot(p_main, sub_plots..., layout=(2, 3), size=(1400, 800), margin=5Plots.mm)
+    # Compile individual plots into final grid layout with increased margins
+    plt_final = plot(p_main, sub_plots..., layout=(2, 3), size=(1400, 800), margin=8mm)
     
     # Return completed figure
     return plt_final
@@ -287,3 +290,13 @@ p_sweep = run_velocity_validation(t_hg_5c[end])
 
 # Display final layout in plot pane
 display(p_sweep)
+
+# Set toggle to automatically export a vector graphics file of the final plot
+export_vector_image = true
+
+# Automatically save a vector version if the toggle is true
+if export_vector_image
+    output_filename = "validation_nema_10b_plot.svg" 
+    savefig(p_sweep, output_filename)
+    println("Vector image successfully exported to: $output_filename")
+end

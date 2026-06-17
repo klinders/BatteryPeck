@@ -1,6 +1,6 @@
 # ==============================================================================
-# validation_nema_8a.jl     (passive cooling)
-# Validates 1D/2D LPTN thermal network against Nema et al. (2026) 3D CFD data Fig 8a
+# validation_nema_8b.jl     (active cooling)
+# Validates 1D/2D LPTN thermal network against Nema et al. (2026) 3D CFD data Fig 8b
 # ==============================================================================
 
 using ModelingToolkit
@@ -8,6 +8,7 @@ using OrdinaryDiffEq
 using DataInterpolations
 using DelimitedFiles
 using Plots
+using Plots.Measures
 using Logging
 
 using Revise
@@ -22,7 +23,7 @@ Loads CSV data and filters out backward-pass digitisation artifacts.
 Ensures strictly increasing time array for interpolation stability.
 """
 function load_and_preprocess(filepath)
-    # Read raw data from specified filepath
+    # Read raw data from specified file path
     raw_data = readdlm(filepath, ',')
     
     # Remove header row if present
@@ -94,18 +95,18 @@ function compute_metrics(t_sim, y_sim, t_val, y_val)
     # Evaluate simulation interpolation at validation time points
     y_sim_at_val = [sim_interp(t) for t in t_val_trimmed]
     
-    # Root mean square error
+    # Calculate root mean square error
     rmse = sqrt(sum((y_sim_at_val .- y_val_trimmed).^2) / length(y_val_trimmed))
     
-    # Mean of validation values
+    # Calculate mean of validation values
     y_mean = sum(y_val_trimmed) / length(y_val_trimmed)
     
-    # Total sum of squares
+    # Calculate total sum of squares
     ss_tot = sum((y_val_trimmed .- y_mean).^2)
-    # Residual sum of squares
+    # Calculate residual sum of squares
     ss_res = sum((y_val_trimmed .- y_sim_at_val).^2)
     
-    # Coefficient of determination
+    # Calculate coefficient of determination
     r2 = 1.0 - (ss_res / ss_tot)
     
     # Return calculated error metrics
@@ -161,12 +162,12 @@ end
 # Register 5C function for symbolic execution
 @register_symbolic q_gen_5c(t)
 
-# Set near zero coolant velocity to simulate passive cooling
-v_coolant = 0.0000001
+# Set active coolant velocity
+v_coolant = 0.3 
 # Define fluid density
 rho_water = 998.0
 # Define channel width
-W_channel = 0.002 
+W_channel = 0.002
 # Define channel height
 H_channel = 0.050 
 
@@ -198,7 +199,7 @@ val_params = PackParameters(
     ambient_temperature = 298.15,
     inlet_temperature = 298.15,
     mass_flow_rate = m_dot_baseline, 
-    ambient_convection_coefficient = 5
+    ambient_convection_coefficient = 5 # 17 old
 )
 
 # Build spatial geometry for battery pack
@@ -222,7 +223,7 @@ function run_and_validate(rate_name, q_func, t_hg_end, val_filename)
     # Print validation start message to console
     println("\nStarting validation for: $rate_name discharge")
     
-    # Construct and simplifies ODE system while suppressing console warnings
+    # Construct and simplify ODE system while suppressing console warnings
     sys_simplified, cells = with_logger(ConsoleLogger(stderr, Logging.Error)) do
         # Build base thermal system
         sys_base = build_pack_system(Symbol("sys_$rate_name"), geom, val_params)
@@ -243,25 +244,25 @@ function run_and_validate(rate_name, q_func, t_hg_end, val_filename)
     # Define ODE problem with jacobian and sparse matrix forms
     prob = ODEProblem(sys_simplified, [], (0.0, t_hg_end), jac=true, sparse=true)
     
-    # Solve ODE problem and times execution
+    # Solve ODE problem and time execution
     @time sol = solve(prob, QNDF(), saveat=1.0, dtmax=1.0) 
 
     # Extract simulation time array
     t_sim = sol.t
     
-    # Extract cell temperatures in Kelvin
+    # Extract cell temperatures in kelvin
     T_cells_K = [sol[cells[i].core_cap.T] for i in 1:num_cells]
     
     # Find maximum cell temperature at each time step
     T_max_sim_K = maximum(hcat(T_cells_K...), dims=2)[:, 1]
     
-    # Convert maximum temperature to Celsius
+    # Convert maximum temperature to celsius
     T_max_sim_C = T_max_sim_K .- 273.15
 
     # Load validation data from specified filename
     t_val, y_val_K = load_and_preprocess(joinpath(data_dir, val_filename))
     
-    # Convert validation temperature to Celsius
+    # Convert validation temperature to celsius
     y_val_C = y_val_K .- 273.15
     
     # Compute error metrics between simulation and validation data
@@ -272,34 +273,53 @@ function run_and_validate(rate_name, q_func, t_hg_end, val_filename)
     # Print calculated R² to console
     println("  -> R²:   $(round(r2, digits=4))")
 
-    # Initialise plot with simulation data
+    # Calculate dynamic relative positions for text annotation (5% left, 85% bottom)
+    y_max = max(maximum(T_max_sim_C), maximum(y_val_C))
+    y_min = min(minimum(T_max_sim_C), minimum(y_val_C))
+    
+    x_pos = 0.05 * t_hg_end
+    y_pos = y_min + 0.85 * (y_max - y_min)
+
+    # Initialise plot with simulation data and explicit margins
     plt = plot(
         t_sim, T_max_sim_C, 
-        label="LPTN Simulation", 
+        label="LPTN simulation", 
         linewidth=2, color=:blue,
         xlabel="Time (s)", ylabel="Temperature (°C)",
-        title="Nema et al. (2026) - $rate_name validation",
-        legend=:bottomright, grid=true
+        title="$rate_name active cooling",
+        legend=:bottomright, grid=true, margin=6mm
     )
     
     # Overlay CFD validation data as scatter points
     scatter!(
         plt, t_val, y_val_C, 
-        label="Nema 3D CFD Data", 
+        label="Nema 3D CFD data", 
         markershape=:circle, color=:red, markersize=4, alpha=0.7
     )
     
-    # Annotate plot with calculated error metrics
-    annotate!(plt, [(t_hg_end*0.1, maximum(y_val_C)*0.95, text("RMSE: $(round(rmse, digits=2)) °C\nR²: $(round(r2, digits=3))", 10, :left))])
+    # Annotate plot with calculated error metrics using dynamic placement
+    annotate!(plt, [(x_pos, y_pos, text("RMSE: $(round(rmse, digits=2)) °C\nR²: $(round(r2, digits=3))", 10, :left))])
     
     # Return completed plot object
     return plt
 end
 
 # Execute validation sequence for 1C discharge
-p_1c = run_and_validate("1C", q_gen_1c, t_hg_1c[end], "8a_1C.csv")
+p_1c = run_and_validate("1C", q_gen_1c, t_hg_1c[end], "8b_1C.csv")
 # Execute validation sequence for 5C discharge
-p_5c = run_and_validate("5C", q_gen_5c, t_hg_5c[end], "8a_5C.csv")
+p_5c = run_and_validate("5C", q_gen_5c, t_hg_5c[end], "8b_5C.csv")
+
+# Combine plots and explicitly assign to a variable, adding a margin just to be safe
+p_combined = plot(p_1c, p_5c, layout=(1, 2), size=(1000, 400), margin=6mm)
 
 # Display combined plot layout
-display(plot(p_1c, p_5c, layout=(1, 2), size=(1000, 400)))
+display(p_combined)
+
+# Set toggle to automatically export a vector graphics file of the final plot
+export_vector_image = true
+
+if export_vector_image
+    output_filename = "validation_nema_8b_plot.svg" 
+    savefig(p_combined, output_filename)
+    println("Vector image successfully exported to: $output_filename")
+end

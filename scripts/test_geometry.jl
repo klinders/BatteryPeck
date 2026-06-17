@@ -18,8 +18,8 @@ function circle_shape(x, y, r)
 end
 
 let
-    n_rows = 1
-    n_cols = 4
+    n_rows = 4
+    n_cols = 7
 
     println("Generating geometry map...")
     

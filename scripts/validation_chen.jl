@@ -317,6 +317,18 @@ let
 
     # Combine layouts
     l = @layout [a; b; c]
-    p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core shell thermal SPMe validation")
+    p_combined = plot(p_volt, p_temp, p_curr, layout=l, size=(1000, 1000), plot_title="Coupled core-shell thermal SPMe validation")
+    
+    # Show the plot in the VS Code Plot Pane (defaults to PNG for speed)
     display(p_combined)
+
+    # Set toggle to automatically export a vector graphics file of the final plot
+    export_vector_image = true
+
+    # Automatically save a vector version if the toggle is true
+    if export_vector_image
+        output_filename = "validation_chen_plot.svg" 
+        savefig(p_combined, output_filename)
+        println("Vector image successfully exported to: $output_filename")
+    end
 end

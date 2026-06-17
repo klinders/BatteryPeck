@@ -28,6 +28,7 @@ using OrdinaryDiffEq
 using DataInterpolations
 using DelimitedFiles
 using Plots
+using Plots.Measures
 using Logging
 using Statistics
 
@@ -266,6 +267,9 @@ end
 let
     # Define range of target velocities
     velocities = collect(0.1:0.1:0.5)
+    
+    # Shared horizontal coordinate for uniform annotation alignment
+    x_pos = 0.35
 
     # Initialise dictionary for pressure outputs
     results_dp = Dict{Float64, Vector{Float64}}()
@@ -300,53 +304,80 @@ let
     println("Pump Power    - RMSE: $(round(rmse_W50, digits=4)) mW, R²: $(round(r2_W50, digits=4))\n")
 
     # Initialise plot for 40mm pressure drop
+    y_max1 = max(maximum(results_dp[0.040]), maximum(dp_val_40))
+    y_min1 = min(minimum(results_dp[0.040]), minimum(dp_val_40))
+    y_pos1 = y_min1 + 0.15 * (y_max1 - y_min1)
+    
     p1 = plot(
-        velocities, results_dp[0.040], label="LPTN (40mm)", 
+        velocities, results_dp[0.040], label="Sim.", 
         color=:blue, linewidth=2, marker=:circle,
-        xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
-        title="Fig 11a: DP (Corrected CFD)", legend=:topleft, grid=true
+        xlabel="Velocity (m/s)", ylabel="Pressure drop (kPa)",
+        title="Pressure drop (40 mm)", legend=:topleft, grid=true
     )
     # Overlay validation data for 40mm pressure drop
-    scatter!(p1, v_val_dp_40, dp_val_40, label="Nema CFD", color=:red, markersize=5)
+    scatter!(p1, v_val_dp_40, dp_val_40, label="CFD", color=:red, markersize=5)
     # Annotate metrics
-    annotate!(p1, [(0.38, maximum(dp_val_40) * 0.15, text("RMSE: $(round(rmse_dp40, digits=3))\nR²: $(round(r2_dp40, digits=3))", 10, :left))])
+    annotate!(p1, [(x_pos, y_pos1, text("RMSE: $(round(rmse_dp40, digits=3))\nR²: $(round(r2_dp40, digits=3))", 10, :left))])
 
     # Initialise plot for 40mm pump power
+    y_max2 = max(maximum(results_W[0.040]), maximum(W_val_40))
+    y_min2 = min(minimum(results_W[0.040]), minimum(W_val_40))
+    y_pos2 = y_min2 + 0.15 * (y_max2 - y_min2)
+    
     p2 = plot(
-        velocities, results_W[0.040], label="LPTN (40mm)", 
+        velocities, results_W[0.040], label="Sim.", 
         color=:green, linewidth=2, marker=:circle,
         xlabel="Velocity (m/s)", ylabel="Power (mW)",
-        title="Fig 11a: Pump Power", legend=:topleft, grid=true
+        title="Pump power (40 mm)", legend=:topleft, grid=true
     )
     # Overlay corrected validation data for 40mm power
-    scatter!(p2, v_val_W_40, W_val_40, label="Nema CFD (Corrected)", color=:red, markersize=5)
+    scatter!(p2, v_val_W_40, W_val_40, label="CFD", color=:red, markersize=5)
     # Annotate metrics
-    annotate!(p2, [(0.38, maximum(W_val_40) * 0.15, text("RMSE: $(round(rmse_W40, digits=3))\nR²: $(round(r2_W40, digits=3))", 10, :left))])
+    annotate!(p2, [(x_pos, y_pos2, text("RMSE: $(round(rmse_W40, digits=3))\nR²: $(round(r2_W40, digits=3))", 10, :left))])
 
     # Initialise plot for 50mm pressure drop
+    y_max3 = max(maximum(results_dp[0.050]), maximum(dp_val_50))
+    y_min3 = min(minimum(results_dp[0.050]), minimum(dp_val_50))
+    y_pos3 = y_min3 + 0.15 * (y_max3 - y_min3)
+    
     p3 = plot(
-        velocities, results_dp[0.050], label="LPTN (50mm)", 
+        velocities, results_dp[0.050], label="Sim.", 
         color=:blue, linewidth=2, marker=:circle,
-        xlabel="Velocity (m/s)", ylabel="Pressure Drop (kPa)",
-        title="Fig 11b: DP (Flawed CFD)", legend=:topleft, grid=true
+        xlabel="Velocity (m/s)", ylabel="Pressure drop (kPa)",
+        title="Pressure drop (50 mm)", legend=:topleft, grid=true
     )
     # Overlay validation data for 50mm pressure drop
-    scatter!(p3, v_val_dp_50, dp_val_50, label="Nema CFD", color=:red, markersize=5)
+    scatter!(p3, v_val_dp_50, dp_val_50, label="CFD", color=:red, markersize=5)
     # Annotate metrics
-    annotate!(p3, [(0.38, maximum(dp_val_50) * 0.15, text("RMSE: $(round(rmse_dp50, digits=3))\nR²: $(round(r2_dp50, digits=3))", 10, :left))])
+    annotate!(p3, [(x_pos, y_pos3, text("RMSE: $(round(rmse_dp50, digits=3))\nR²: $(round(r2_dp50, digits=3))", 10, :left))])
 
     # Initialise plot for 50mm pump power
+    y_max4 = max(maximum(results_W[0.050]), maximum(W_val_50))
+    y_min4 = min(minimum(results_W[0.050]), minimum(W_val_50))
+    y_pos4 = y_min4 + 0.15 * (y_max4 - y_min4)
+    
     p4 = plot(
-        velocities, results_W[0.050], label="LPTN (50mm)", 
+        velocities, results_W[0.050], label="Sim.", 
         color=:green, linewidth=2, marker=:circle,
         xlabel="Velocity (m/s)", ylabel="Power (mW)",
-        title="Fig 11b: Pump Power", legend=:topleft, grid=true
+        title="Pump power (50 mm)", legend=:topleft, grid=true
     )
     # Overlay corrected validation data for 50mm power
-    scatter!(p4, v_val_W_50, W_val_50, label="Nema CFD (Corrected)", color=:red, markersize=5)
+    scatter!(p4, v_val_W_50, W_val_50, label="CFD", color=:red, markersize=5)
     # Annotate metrics
-    annotate!(p4, [(0.38, maximum(W_val_50) * 0.15, text("RMSE: $(round(rmse_W50, digits=3))\nR²: $(round(r2_W50, digits=3))", 10, :left))])
+    annotate!(p4, [(x_pos, y_pos4, text("RMSE: $(round(rmse_W50, digits=3))\nR²: $(round(r2_W50, digits=3))", 10, :left))])
 
-    # Display combined plot layout
-    display(plot(p1, p2, p3, p4, layout=(2, 2), size=(1000, 800)))
+    # Display combined plot layout with increased margin to prevent clipping
+    p_combined = plot(p1, p2, p3, p4, layout=(2, 2), size=(1000, 800), margin=8mm)
+    display(p_combined)
+    
+    # Set toggle to automatically export a vector graphics file of the final plot
+    export_vector_image = true
+
+    # Automatically save a vector version if the toggle is true
+    if export_vector_image
+        output_filename = "validation_nema_11_plot.svg" 
+        savefig(p_combined, output_filename)
+        println("Vector image successfully exported to: $output_filename")
+    end
 end
