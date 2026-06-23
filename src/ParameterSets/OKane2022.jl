@@ -107,6 +107,6 @@ function OKane2022()
         n_el = 1,
         Q₀ = 5, # Original battery capacity in Ah
         Vmin = 2.0,
-        Vmax = 4.2
+        Vmax = 4.25
     )
 end

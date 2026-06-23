@@ -152,8 +152,8 @@ function Base.:*(a::AbstractVector{<:AbstractStep}, n::Integer)
     return repeat(a,n)
 end
 
-function Base.:+(a::AbstractVector{<:AbstractStep}, b::AbstractVector{<:AbstractStep})
-    return vcat(a,b)
+function Base.:+(args::Vector{<:AbstractStep}...)
+    return vcat(args...)
 end
 
 """
