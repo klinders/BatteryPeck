@@ -45,11 +45,45 @@ function dUn_dT_f(z)
     return val_mV * 1e-3
 end
 
-# Initiate end of experiment
-function abort!(mod,obs,ctx,int)
+# Diagnostic abort callbacks
+function abort_vmin!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
-    t = round(int.t,digits=2)
-    @warn "Simulation step terminated at t=$t"
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Voltage hit Vmin."
+    return (;)
+end
+function abort_vmax!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Voltage hit Vmax."
+    return (;)
+end
+function abort_pe_max!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Cathode surface concentration hit 99.99% (Saturated)."
+    return (;)
+end
+function abort_ne_max!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Anode surface concentration hit 99.99% (Saturated)."
+    return (;)
+end
+function abort_pe_min!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Cathode surface concentration hit 0.01% (Depleted)."
+    return (;)
+end
+function abort_ne_min!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Anode surface concentration hit 0.01% (Depleted)."
+    return (;)
+end
+function abort_ce_min!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Electrolyte concentration depleted (< 1.0 mol/m³)."
+    return (;)
+end
+function abort_porosity_min!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    @warn "Simulation terminated at t=$(round(int.t,digits=2)): Anode porosity critically low (< 1%)."
     return (;)
 end
 
@@ -138,8 +172,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     Nn = length(g.el.ixₙ)
     Np = length(g.el.ixₚ)
     
-    ηᵣn = 2*R*T.u/F*asinh(ne.J.u / (2*j̄ₙ0))
-    ηᵣp = 2*R*T.u/F*asinh(pe.J.u / (2*j̄ₚ0))
+    ηᵣn = 2*R*T.u/F*asinh(ne.J.u / (max(2*j̄ₙ0, 1e-10)))
+    ηᵣp = 2*R*T.u/F*asinh(pe.J.u / (max(2*j̄ₚ0, 1e-10)))
 
     # X-average of the electrolyte potential
     ϕₛ_n = [i_app*(x[i] - 2*params.e.Lₙ)*x[i]/2/params.n.σₖ/params.e.Lₙ for i in g.el.ixₙ]
@@ -158,8 +192,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
         # Exchange current densities
-        [jₙ0[i] ~ params.n.mₖ*sqrt(el.cₑ[g.el.ixₙ[i]]*ne.c_surf*(params.n.c₊-ne.c_surf)) for i in 1:Nn]...,
-        [jₚ0[i] ~ params.p.mₖ*sqrt(el.cₑ[g.el.ixₚ[i]]*pe.c_surf*(params.p.c₊-pe.c_surf)) for i in 1:Np]...,
+        [jₙ0[i] ~ params.n.mₖ*NaNMath.sqrt(max(el.cₑ[g.el.ixₙ[i]]*ne.c_surf*(params.n.c₊-ne.c_surf), 1)) for i in 1:Nn]...,
+        [jₚ0[i] ~ params.p.mₖ*NaNMath.sqrt(max(el.cₑ[g.el.ixₚ[i]]*pe.c_surf*(params.p.c₊-pe.c_surf), 1)) for i in 1:Np]...,
         j̄ₙ0 ~ sum(jₙ0)/Nn,
         j̄ₚ0 ~ sum(jₚ0)/Np,
 
@@ -240,16 +274,19 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         append!(eqns, [Q_loss_Ah ~ 0.0])
     end
 
-    events = [
-        [
-            v ~ params.Vmin,
-            v ~ params.Vmax,
-            pe.c_surf ~ params.p.c₊*0.999,
-            ne.c_surf ~ params.n.c₊*0.999,
-            pe.c_surf ~ params.p.c₊*0.001,
-            ne.c_surf ~ params.n.c₊*0.001
-        ]=>(abort!,(;))
+    # Build the events array starting with scalar variables
+    events = Any[
+        (v ~ params.Vmin) => (abort_vmin!, (;)),
+        (v ~ params.Vmax) => (abort_vmax!, (;)),
+        (pe.c_surf ~ params.p.c₊*0.9999) => (abort_pe_max!, (;)),
+        (ne.c_surf ~ params.n.c₊*0.9999) => (abort_ne_max!, (;)),
+        (pe.c_surf ~ params.p.c₊*0.0001) => (abort_pe_min!, (;)),
+        (ne.c_surf ~ params.n.c₊*0.0001) => (abort_ne_min!, (;))
     ]
+
+    # Dynamically unpack the array constraints into individual events
+    append!(events, [(el.cₑ[i] ~ 1.0) => (abort_ce_min!, (;)) for i in 1:length(g.el.x_centers)])
+    append!(events, [(el.ϵ[i] ~ 0.01) => (abort_porosity_min!, (;)) for i in g.el.ixₙ])
 
     return System(eqns, t; name=name, systems=submodels, continuous_events=events)
 end

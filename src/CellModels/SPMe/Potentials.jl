@@ -22,12 +22,12 @@ function ηᵣ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.Abstrac
     cₑ = el
     
     # Volumetric current densities
-    jₚ = params.p.mₖ.*sqrt.(cₑ[g.el.ixₚ].*cₚ.*(params.p.c₊-cₚ))
-    jₙ = params.n.mₖ.*sqrt.(cₑ[g.el.ixₙ].*cₙ.*(params.n.c₊-cₙ))
+    jₚ = params.p.mₖ.*sqrt.(max(cₑ[g.el.ixₚ].*cₚ.*(params.p.c₊-cₚ), 1e-10))
+    jₙ = params.n.mₖ.*sqrt.(max(cₑ[g.el.ixₙ].*cₙ.*(params.n.c₊-cₙ), 1e-10))
     
     # Hyperbolic arcsine terms for inverse Butler-Volmer equation
-    asin_p = asinh.(i_app./params.p.aₖ./Lₚ./jₚ)
-    asin_n = asinh.(i_app./params.n.aₖ./Lₙ./jₙ)
+    asin_p = asinh.(i_app./(max(params.p.aₖ.*Lₚ.*jₚ, 1e-10)))
+    asin_n = asinh.(i_app./(max(params.n.aₖ.*Lₙ.*jₙ, 1e-10)))
     
     # Integral terms
     sum_p = ∫(asin_p, x[g.el.ixₚ])
@@ -56,7 +56,7 @@ function ηₑ_f(params::BatteryParameters, g::NamedTuple, el::Symbolics.Abstrac
     # Electrolyte potential drop
     df_fac = ones(length(cₑ))
 
-    logc = log.(cₑ)
+    logc = log.(max(cₑ, 1e-10))
 
     # Derivative using central difference 
     dlogc_dx = [
@@ -153,9 +153,9 @@ function ηᵣ_x(params::SolidParticleParameters, cₖ, cₑ, j, T)
     F = 96485 # Faraday constant
     N = length(cₖ)
 
-    jₓ0 = [params.mₖ*sqrt(cₑ[i]*cₖ[i]*(params.c₊-cₖ[i])) for i in 1:N]
+    jₓ0 = [params.mₖ*sqrt(max(cₑ[i]*cₖ[i]*(params.c₊-cₖ[i]), 1e-10)) for i in 1:N]
     
-    asin = [asinh(j/params.aₖ/jₓ0[i]) for i in 1:N]
+    asin = [asinh(j/(max(params.aₖ*jₓ0[i], 1e-10))) for i in 1:N]
     
     sinh_x = 2*R*T/F*sum(asin)/N
 

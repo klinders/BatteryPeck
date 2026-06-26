@@ -10,10 +10,10 @@ using CSV
 using DataFrames
 using Plots
 
-# Define folder to inspect and plot window controls
-TARGET_FOLDER = "results_run_a_s6" 
-MAX_DAYS_TO_PLOT = 90.0   
-ZOOM_HOURS = 12.0         
+# Define path to inspect (can be a folder name OR a direct .csv file name)
+TARGET_PATH = "diagnostic_90_days_master.csv" 
+MAX_DAYS_TO_PLOT = 90   
+ZOOM_HOURS = 24.0         
 EXPORT_SVG = true         
 
 """
@@ -32,6 +32,8 @@ Drop redundant steady state points to collapse SVG file sizes.
 - Decimated data frame
 """
 function smart_decimate(df::DataFrame, dt_thresh, dV_thresh, dI_thresh, dT_thresh)
+    if nrow(df) <= 2 return df end
+
     # Preallocate index array to store retained rows
     keep_idx = Int[1]
     sizehint!(keep_idx, div(nrow(df), 10))
@@ -67,31 +69,53 @@ function smart_decimate(df::DataFrame, dt_thresh, dV_thresh, dI_thresh, dT_thres
 end
 
 """
-    inspect_scenario(folder_name::String)
+    inspect_scenario(target_path::String)
 
 Generate short cycle sanity check dashboard for ablation scenarios.
 
 # Arguments
-- `folder_name::String`: Target folder containing master results CSV
+- `target_path::String`: Target folder containing master results CSV, OR direct CSV path
 
 # Returns
 - Nothing
 """
-function inspect_scenario(folder_name::String)
-    # Load raw data from target directory
-    folder_path = joinpath(pwd(), folder_name)
-    master_file = joinpath(folder_path, "master_results.csv")
+function inspect_scenario(target_path::String)
     
-    if !isfile(master_file)
-        error("Could not find master_results.csv in $folder_path")
+    # Determine if target is a file or directory
+    master_file = ""
+    out_prefix = ""
+    
+    if isfile(target_path) && endswith(target_path, ".csv")
+        master_file = target_path
+        out_prefix = replace(basename(target_path), ".csv" => "")
+    elseif isdir(target_path)
+        master_file = joinpath(target_path, "master_results.csv")
+        out_prefix = basename(normpath(target_path))
+        if !isfile(master_file)
+            error("Could not find master_results.csv in directory $target_path")
+        end
+    else
+        error("Invalid target path: $target_path. Neither a valid folder nor a .csv file.")
     end
     
-    println("\n[!] Loading data from: $folder_name...")
+    println("\n[!] Loading data from: $master_file...")
     df_raw = CSV.read(master_file, DataFrame)
+    
+    if nrow(df_raw) == 0
+        error("The loaded CSV file is entirely empty.")
+    end
+
+    # CRITICAL FIX: Normalize time so t=0 is the start of this CSV chunk
+    # This prevents checkpointed data (starting at 157M seconds) from being deleted by the filter
+    df_raw.Time_s .-= df_raw.Time_s[1]
     
     # Truncate dataset to maximum allowed plot duration
     max_allowed_time = MAX_DAYS_TO_PLOT * 24 * 3600.0
     df_raw = filter(row -> row.Time_s <= max_allowed_time, df_raw)
+    
+    if nrow(df_raw) == 0
+        error("DataFrame is empty after time filtering! Check MAX_DAYS_TO_PLOT.")
+    end
     
     # Slice target window from end of dataset to generate zoomed view
     max_time = maximum(df_raw.Time_s)
@@ -114,8 +138,14 @@ function inspect_scenario(folder_name::String)
     
     p1_twin = twinx()
     plot!(p1_twin, df_vit_zoomed.Time_s ./ 3600.0, df_vit_zoomed.Pack_Current_A, 
-        label="Pack current", color=:red, lw=1.5, linestyle=:dash, 
+        label="Pack current", color=:red, lw=1.5, linestyle=:solid, 
         ylabel="Current [A]", legend=:bottomright)
+        
+    # Overlay dynamic BMS limits if they exist in the CSV
+    if "BMS_Limit_Chg_A" in names(df_vit_zoomed)
+        plot!(p1_twin, df_vit_zoomed.Time_s ./ 3600.0, df_vit_zoomed.BMS_Limit_Chg_A, label="BMS Limit", color=:black, lw=1.5, linestyle=:dash)
+        plot!(p1_twin, df_vit_zoomed.Time_s ./ 3600.0, df_vit_zoomed.BMS_Limit_Dsg_A, label="", color=:black, lw=1.5, linestyle=:dash)
+    end
     
     # Generate thermal plot displaying maximum core temperature and coolant velocity
     p2 = plot(df_vit_full.Time_s ./ (24*3600), df_vit_full.Max_Temp_C, 
@@ -158,7 +188,7 @@ function inspect_scenario(folder_name::String)
     display(dashboard)
     
     if EXPORT_SVG
-        out_name = folder_name * ".svg"
+        out_name = out_prefix * "_dashboard.svg"
         savefig(dashboard, out_name)
         println("[!] Dashboard exported to: $out_name")
     else
@@ -166,4 +196,4 @@ function inspect_scenario(folder_name::String)
     end
 end
 
-inspect_scenario(TARGET_FOLDER)
+inspect_scenario(TARGET_PATH)

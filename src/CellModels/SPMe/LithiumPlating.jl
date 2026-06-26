@@ -161,7 +161,7 @@ function IrreversiblePlating(; name, p, s, g)
         [η_plating[i] ~ -η_stripping[i] for i in 1:N]...,
 
         # Exchange current density (Purely Plating, No Stripping)
-        [j_stripping[i] ~ -j0_plating[i]*exp(α_plating*F/R/T.u*η_plating[i]) for i in 1:N]...,
+        [j_stripping[i] ~ -j0_plating[i]*exp(min(α_plating*F/R/T.u*η_plating[i], 300)) for i in 1:N]...,
         
         # Irreversible
         [Dt(c_dead[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,
@@ -264,8 +264,8 @@ function PartiallyReversiblePlating(; name, p, s, g)
 
         # Exchange current density (Butler-Volmer)
         [j_stripping[i] ~ 
-                    j0_stripping[i]*exp(α_stripping*F/R/T.u*η_stripping[i]) -
-                    j0_plating[i]*exp(α_plating*F/R/T.u*η_plating[i]) 
+                    j0_stripping[i]*exp(min(α_stripping*F/R/T.u*η_stripping[i], 300)) -
+                    j0_plating[i]*exp(min(α_plating*F/R/T.u*η_plating[i], 300)) 
         for i in 1:N]...,
         
         # Partially reversible mass tracking

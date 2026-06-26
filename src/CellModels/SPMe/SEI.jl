@@ -146,7 +146,7 @@ function ReactionLimitedSEI(; name, p, s, g)
 
     eqns = [
         # Exchange current density using parameter naming from src Base.jl (j_sei)
-        [j_sei[i] ~ -p.j_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]...,
+        [j_sei[i] ~ -p.j_sei*exp(min(-p.α*F/R/T.u*η_sei[i], 300)) for i in 1:N]...,
 
         [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
@@ -227,7 +227,7 @@ function SolventDiffusionLimitedSEI(; name, p, s, g)
     end
 
     # All SEI growth mechanisms assumed to have Arrhenius dependence
-    arrhenius = exp(p.E_sei / R * (1 / p.T_ref - 1 / T.u))
+    arrhenius = exp(min(p.E_sei / R * (1 / p.T_ref - 1 / T.u), 300))
     
     eqns = [
         # Exchange current density
