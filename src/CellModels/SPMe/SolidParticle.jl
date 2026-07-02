@@ -45,6 +45,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         # I am adding two ghost nodes for the boundary conditions
         (c(t))[1:g.Nᵣ] = repeat([p.c₀],g.Nᵣ)
         c_avr(t)
+        c_r(t)
         c_surf(t)
         U₀(t)
         z(t)
@@ -58,6 +59,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     eqns = [
         c_avr ~ sum(c)/g.Nᵣ
+        c_r ~ sum([c[i]*Vᵢ[i] for i in 1:g.Nᵣ])/sum(Vᵢ)
         c_surf ~ 1.5*c[end] - 0.5*c[end-1] # Surface concentration
         z ~ c_surf/p.c₊ # Stoichiometry
         U₀ ~ p.Uₖ(z) # Open-circuit potential

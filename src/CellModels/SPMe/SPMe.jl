@@ -9,6 +9,7 @@ include("Electrolyte.jl")
 include("Potentials.jl")
 include("SEI.jl")
 include("LithiumPlating.jl")
+include("ParticleCracking.jl")
 
 function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
@@ -47,8 +48,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named el = Electrolyte(p=params.e, g=g.el)
     @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
     @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, g=g) 
+    @named cracking = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, g=g)
 
-    submodels = [p,n,T,pe,ne,el,sei,plating]
+    submodels = [p,n,T,pe,ne,el,sei,plating,cracking]
 
     @variables begin
         # Terminal voltage and current
@@ -181,6 +183,15 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         plating.η_sei.u ~ sei.ϕf,
         [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,
+
+        ## Cracking
+        cracking.J.u ~ ne.J.u,
+        cracking.T.u ~ T.u,
+        cracking.aₖ.u ~ aₙ,
+        [cracking.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        cracking.c_s_r.u ~ ne.c_r,
+        cracking.c_s_surf.u ~ ne.c_surf,
+
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] + plating.L_plating[i] + plating.L_dead[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
