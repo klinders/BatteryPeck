@@ -59,15 +59,16 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
     # Discretized equations
     Δr,r,Vᵢ,Aₗ,Aᵣ = g.Δr, g.r, g.Vᵢ, g.Aₗ, g.Aᵣ
 
-    θ_M = p.Ω/ (p.Rₖ * T.u) * (2 * p.Ω * p.E) / (9 * (1 - p.ν))
+    θ_M = p.Ω/ (R * T.u) * (2 * p.Ω * p.E) / (9 * (1 - p.ν))
+    c₀_cr = 0.0
 
     D_f = [p.Dₖ(c[i], T.u) for i in 1:g.Nᵣ] # Diffusivities at cell centers
-    Dₗ = [nothing; [D_face(D_f[i-1],D_f[i],Δr,Δr) for i in 2:g.Nᵣ]] # Left diffusivities
-    Dᵣ = [[D_face(D_f[i], D_f[i+1],Δr,Δr) for i in 1:g.Nᵣ-1]; nothing] # Right diffusivities
+    Dₗ = [nothing; [D_face(D[i-1],D[i],Δr,Δr) for i in 2:g.Nᵣ]] # Left diffusivities
+    Dᵣ = [[D_face(D[i], D[i+1],Δr,Δr) for i in 1:g.Nᵣ-1]; nothing] # Right diffusivities
 
     eqns = [
         # Diffusion with stress
-        [σ[i] ~ 1 + θ_M * (c[i] - p.c₀) for i in 1:g.Nᵣ]...
+        [σ[i] ~ 1 + θ_M * (c[i] - c₀_cr) for i in 1:g.Nᵣ]...
         [D[i] ~ p.Dₖ(c[i], T.u)*σ[i] for i in 1:g.Nᵣ]...
         D_r ~ sum([D[i]*Vᵢ[i] for i in 1:g.Nᵣ])/sum(Vᵢ)
         
