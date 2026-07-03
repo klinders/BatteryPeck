@@ -23,29 +23,38 @@ sei_parameters = SideReactionParameters(
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
     aₖ = 383960, # Surface area density in m^-1
-    Dₖ = c -> 3.3e-14, # electrode diffusivity in m^2*s^-1
+    Dₖ = (c,T) -> 3.3e-14*exp(3.03e4/8.314*(1/298.15-1/T)), # electrode diffusivity in m^2*s^-1
     σₖ = 215, # Conductivity in S*m^-1
     c₀ = 29866, # Initial electrode concentration in mol*m^-3
     c₊ = 33133, # Maximum electrode concentration in mol*m^-3
     # Open-circuit potential in V
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
-    mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
+    j0 = (cₑ, c_surf, c_max, T) -> 6.48e-7*sqrt(cₑ*c_surf*(c_max-c_surf))*exp(35000/8.314*(1/298.15-1/T)), # Exchange current density function
     L_sei₀ = 5e-9,
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 3.1e-06, # pos: 1.25e-05 (parial molar volume)
+    E = 1.5e10, # pos: 3.75e11 (Youngs modulus)
+    ν = 0.3, # pos: 0.2 (poissons ratio)
     side_reactions = [sei_parameters]
 )
 
 p = SolidParticleParameters(
     Rₖ = 5.22e-6, # Radius of the electrode in m
     aₖ = 3.82e5, # Surface area density in m^-1
-    Dₖ = c -> 4.0e-15, # electrode diffusivity in m^2*s^-1
+    Dₖ = (c,T) -> (4.0e-15)*exp(25000/8.314*(1/298.15-1/T)), # electrode diffusivity in m^2*s^-1
     σₖ = 0.18, # Conductivity in S*m^-1
     c₀ = 17038, # Initial electrode concentration in mol*m^-3
     c₊ = 63104, # Maximum electrode concentration in mol*m^-3
     # Open-circuit potential in V
     Uₖ = z->-0.8090*z + 4.4875 - 0.0428*tanh(18.5138*(z-0.5542)) - 17.7326*tanh(15.7890*(z-0.3117)) + 17.5842*tanh(15.9308*(z-0.3120)), 
-    mₖ = 3.42e-6, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
+    j0 = (cₑ, c_surf, c_max, T) -> 3.42e-6*sqrt(cₑ*c_surf*(c_max-c_surf))*exp(17800/8.314*(1/298.15-1/T)), # Exchange current density function
     L_sei₀ = 0,
-
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 1.25e-05, # pos: 1.25e-05 (parial molar volume)
+    E = 3.75e11, # pos: 3.75e11 (Youngs modulus)
+    ν = 0.2, # pos: 0.2 (poissons ratio)
 )
 
 e = ElectrolyteParameters(

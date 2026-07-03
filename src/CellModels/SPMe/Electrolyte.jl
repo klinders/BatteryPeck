@@ -191,7 +191,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         # Electrolyte potential
         [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
-        ϕ̄ₑn ~ ϕₑ_rn + χ*R*T.u/F*Mₙ,# sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
+        ϕ̄ₑn ~ sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],#ϕₑ_rn + χ*R*T.u/F*Mₙ,# 
         ϕ̄ₑs ~ sum([ϕₑ[i] for i in g.ixₛ])/g.Nx[2],
         ϕ̄ₑp ~ sum([ϕₑ[i] for i in g.ixₚ])/g.Nx[3],
         ϕ̄ₑ ~ (ϕ̄ₑn*p.Lₙ + ϕ̄ₑs*p.Lₛ + ϕ̄ₑp*p.Lₚ)/L,

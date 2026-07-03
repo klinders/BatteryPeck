@@ -246,6 +246,19 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     F = 96485 # Faraday's constant
     N = g.el.Nx[1]
 
+
+    # Physical constants for stress/displacement calculations (Ai2019)
+    stress_geometric_factor = 3.0
+    displacement_geometric_factor = 3.0
+    crack_roughness_factor = 2.0
+
+    R0 = s.Rₖ
+    c₀ = 0
+
+    k_cr = 3.9e-20
+    b_cr = 1.12
+    m_cr = 2.2
+
     @named J = RealInput()
     @named T = RealInput()
     @named Δϕₛ = RealInputArray(nin=N)
@@ -258,6 +271,13 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     Dt = Differential(t)
 
     l_cr_0 = 2e-8
+    L₀ = 5e-13
+    c_sei₀ = L₀/p.V̄*s.aₖ
+    
+    # All SEI growth mechanisms assumed to have Arrhenius dependence
+    arrhenius = exp(
+        p.E_sei / R * (1 / p.T_ref - 1 / T.u)
+    )
     
     @variables begin
         l_cr(t) = l_cr_0 
@@ -267,7 +287,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         u_d(t)
         
         # SEI concentration
-        (c_sei(t))[1:N] = 0#scale
+        (c_sei(t))[1:N] = c_sei₀
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -285,43 +305,25 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         Q_sei(t)
     end
 
-    # Physical constants for stress/displacement calculations (Ai2019)
-    stress_geometric_factor = 3.0
-    displacement_geometric_factor = 3.0
-    crack_roughness_factor = 2.0
-
-    ρ_cr = 3.18e-15
-    w_cr = 1.5e-8
-    Ω = 3.1e-06 # pos: 1.25e-05 (parial molar volume)
-    E = 1.5e10 # pos: 3.75e11 (Youngs modulus)
-    ν = 0.3 # pos: 0.2 (poissons ratio)
-    R0 = s.Rₖ
-    c₀ = 0
-
-    k_cr = 3.9e-20
-    b_cr = 1.12
-    m_cr = 2.2
-
-
-    dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr * sqrt(pi*l_cr), 0)
+    dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr* sqrt(pi*l_cr), 0)
 
     eqns = [
 
         # Cracking
         Dt(l_cr) ~ k_cr*(dK_SIF^m_cr)/3600,
-        r_surf ~ 1 + crack_roughness_factor*l_cr*ρ_cr*w_cr,
+        r_surf ~ 1 + crack_roughness_factor*l_cr*s.ρ_cr*s.w_cr,
         a_cr ~ (r_surf - 1)*aₖ.u,
-        σₜ ~ Ω*E*(c_s_r.u - c_s_surf.u)/stress_geometric_factor/(1.0 - ν),
-        u_d ~ Ω*R0*(c_s_r.u - c₀)/displacement_geometric_factor,
+        σₜ ~ s.Ω*s.E*(c_s_r.u - c_s_surf.u)/stress_geometric_factor/(1.0 - s.ν),
+        u_d ~ s.Ω*R0*(c_s_r.u - c₀)/displacement_geometric_factor,
 
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        # [j_sei[i] ~ -p.j_sei₀*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]...,
+        [j_sei[i] ~ -p.D_sol*p.c_sol*F/L_sei[i]*arrhenius for i in 1:N]...,
 
-        # [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
-        # [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
+        [Dt(c_sei[i]) ~ -a_cr*j_sei[i]/(F*p.z) for i in 1:N]...,
+        [L_sei[i] ~ c_sei[i]*p.V̄/a_cr for i in 1:N]...,
 
-        # [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
+        [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
 
         l_cr_x ~ l_cr,
         r_surf_x ~ r_surf,
@@ -329,11 +331,11 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         σₜ_x ~ σₜ,
         u_d_x ~ u_d,
 
-        # L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        # c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        # j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        # ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
-        # Q_sei ~ (c_sei_x-c_sei₀)*p.V̄*p.z*F/3600,
+        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
+        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
+        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
+        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        Q_sei ~ (c_sei_x-c_sei₀)*p.V̄*p.z*F/3600,
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ, c_s_r, c_s_surf])

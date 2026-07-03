@@ -92,7 +92,7 @@ Parameters describing lithium-ion electrode (active material particle) propertie
 - `c₀::Float64`: Initial lithium concentration (mol/m³)
 - `c₊::Float64`: Maximum lithium concentration (mol/m³)
 - `Uₖ::Function`: Open circuit potential as function of stoichiometry (V)
-- `mₖ::Float64`: Reaction rate constant (A/m²·(mol/m³)⁻¹·⁵)
+- `j0::Function`: Exchange current density as function of electrolyte concentration, surface concentration, maximum concentration, and temperature (A/m²)
 - `L_sei₀::Float64`: Initial SEI thickness (m)
 - `side_reactions::Vector{SideReactionParameters}`: Secondary reactions on this electrode (default: [])
 """
@@ -104,8 +104,13 @@ Base.@kwdef mutable struct SolidParticleParameters
     c₀ # Initial electrode concentration in mol*m^-3
     c₊ # Maximum electrode concentration in mol*m^-3
     Uₖ # Open-circuit potential in V
-    mₖ # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
+    j0 # Exchange current density function
     L_sei₀ # Initial thickness of SEI film
+    ρ_cr # Crack density
+    w_cr # Crack width
+    Ω # parial molar volume
+    E # Youngs modulus
+    ν # poissons ratio
 
     side_reactions::Vector{SideReactionParameters} = SideReactionParameters[]
 end

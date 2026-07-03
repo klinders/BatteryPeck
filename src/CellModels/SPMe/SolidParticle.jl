@@ -40,10 +40,14 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     # Time derivative operator
     Dt = Differential(t)
-    
+    @show(p.c₀)
+
     @variables begin
         # I am adding two ghost nodes for the boundary conditions
         (c(t))[1:g.Nᵣ] = repeat([p.c₀],g.Nᵣ)
+        (D(t))[1:g.Nᵣ]
+        (σ(t))[1:g.Nᵣ]
+        D_r(t)
         c_avr(t)
         c_r(t)
         c_surf(t)
@@ -54,10 +58,19 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     # Discretized equations
     Δr,r,Vᵢ,Aₗ,Aᵣ = g.Δr, g.r, g.Vᵢ, g.Aₗ, g.Aᵣ
-    Dₗ = [nothing; [D_face(p.Dₖ(c[i-1]), p.Dₖ(c[i]),Δr,Δr) for i in 2:g.Nᵣ]] # Left diffusivities
-    Dᵣ = [[D_face(p.Dₖ(c[i]), p.Dₖ(c[i+1]),Δr,Δr) for i in 1:g.Nᵣ-1]; nothing] # Right diffusivities
+
+    θ_M = p.Ω/ (p.Rₖ * T.u) * (2 * p.Ω * p.E) / (9 * (1 - p.ν))
+
+    D_f = [p.Dₖ(c[i], T.u) for i in 1:g.Nᵣ] # Diffusivities at cell centers
+    Dₗ = [nothing; [D_face(D_f[i-1],D_f[i],Δr,Δr) for i in 2:g.Nᵣ]] # Left diffusivities
+    Dᵣ = [[D_face(D_f[i], D_f[i+1],Δr,Δr) for i in 1:g.Nᵣ-1]; nothing] # Right diffusivities
 
     eqns = [
+        # Diffusion with stress
+        [σ[i] ~ 1 + θ_M * (c[i] - p.c₀) for i in 1:g.Nᵣ]...
+        [D[i] ~ p.Dₖ(c[i], T.u)*σ[i] for i in 1:g.Nᵣ]...
+        D_r ~ sum([D[i]*Vᵢ[i] for i in 1:g.Nᵣ])/sum(Vᵢ)
+        
         c_avr ~ sum(c)/g.Nᵣ
         c_r ~ sum([c[i]*Vᵢ[i] for i in 1:g.Nᵣ])/sum(Vᵢ)
         c_surf ~ 1.5*c[end] - 0.5*c[end-1] # Surface concentration

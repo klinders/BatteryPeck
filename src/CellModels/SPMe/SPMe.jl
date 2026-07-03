@@ -77,6 +77,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
         aₚ(t)
         Q_loss(t)
+        Q_Ah(t) = 0
+        Qt_Ah(t) = 0
 
         #temp
         j_tot_ne(t)
@@ -110,6 +112,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
+    # Overpotentials from the inverse Butler-Volmer equation
     ηᵣn = [2*R*T.u/F*asinh((i_app/params.e.Lₙ/aₙ)/(2*jₙ0[i])) for i in 1:Nn]
     ηᵣp = [2*R*T.u/F*asinh((-i_app/params.e.Lₚ/aₚ)/(2*jₚ0[i])) for i in 1:Np]
 
@@ -139,8 +142,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Δϕₛ ~ -i_app/3*(params.e.Lₚ/params.p.σₖ + params.e.Lₙ/params.n.σₖ),
 
         # Exchange current densities
-        [jₙ0[i] ~ params.n.mₖ*sqrt(el.cₑ[g.el.ixₙ[i]]*ne.c_surf*(params.n.c₊-ne.c_surf)) for i in 1:Nn]...,
-        [jₚ0[i] ~ params.p.mₖ*sqrt(el.cₑ[g.el.ixₚ[i]]*pe.c_surf*(params.p.c₊-pe.c_surf)) for i in 1:Np]...,
+        [jₙ0[i] ~ params.n.j0(el.cₑ[g.el.ixₙ[i]], ne.c_surf, params.n.c₊, T.u) for i in 1:Nn]...,
+        [jₚ0[i] ~ params.p.j0(el.cₑ[g.el.ixₚ[i]], pe.c_surf, params.p.c₊, T.u) for i in 1:Np]...,
         j̄ₙ0 ~ sum(jₙ0)/Nn,
         j̄ₚ0 ~ sum(jₚ0)/Np,
 
@@ -150,7 +153,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
         ϕ̄ₚ ~ sum(ϕₚ)/Np,
-        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x + cracking.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
 
         v ~ p.v - n.v,
@@ -194,11 +197,19 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         
         # Porosity (assumed constant)
-        [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(sei.L_sei[i] + plating.L_plating[i] + plating.L_dead[i] - params.n.L_sei₀) for i in g.el.ixₙ]...,
+        [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(
+            sei.L_sei[i] - params.n.L_sei₀ 
+            + plating.L_plating[i] 
+            + plating.L_dead[i]
+             + cracking.L_sei[i]*(cracking.r_surf - 1)
+            ) for i in g.el.ixₙ]...,
         [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
         [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
 
-        Q_loss ~ sei.Q_loss + plating.Q_loss
+        Q_loss ~ sei.Q_loss + plating.Q_loss,
+
+        Dt(Q_Ah) ~ i/3600,
+        Dt(Qt_Ah) ~ abs(i)/3600
 
     ]
 
