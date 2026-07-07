@@ -45,6 +45,7 @@ function StressDriven(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     @variables begin
         j_lam(t)
         lli(t) = 0
+        Q_loss(t)
     end
 
     # obtain the rate of loss of active materials (LAM) by stress
@@ -64,7 +65,7 @@ function StressDriven(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     eqns = [
         j_lam ~ -s.β_LAM*((σₕ_t - σₕ_min) / s.stress_critical)^s.m_LAM,
         Dt(lli) ~ -V * c_r.u * j_lam,
-
+        Q_loss ~ lli * F / 3600
     ]
 
     System(eqns,t; name=name,systems=[σᵣ, σₜ, c_r])

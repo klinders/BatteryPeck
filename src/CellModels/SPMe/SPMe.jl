@@ -89,6 +89,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Cₙ(t) # Negative electrode capacity in Ah
         Cₚ(t) # Positive electrode capacity in Ah
         Q_loss(t)
+        C_cell(t)
         Q_Ah(t) = 0
         Qt_Ah(t) = 0
 
@@ -229,7 +230,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Cₚ ~ pe.ϵₛ*params.e.Lₚ * A * params.p.c₊ * F / 3600,
         Cₙ ~ ne.ϵₛ*params.e.Lₙ * A * params.n.c₊ * F / 3600,
 
-        Q_loss ~ sei.Q_loss + plating.Q_loss,
+        Q_loss ~ sei.Q_loss + plating.Q_loss + cracking_n.Q_sei + lam_n.Q_loss + lam_p.Q_loss,
+
+        C_cell ~ Q - Q_loss,
 
         Dt(Q_Ah) ~ i/3600,
         Dt(Qt_Ah) ~ abs(i)/3600
