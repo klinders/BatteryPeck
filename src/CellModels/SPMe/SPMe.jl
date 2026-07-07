@@ -10,6 +10,7 @@ include("Potentials.jl")
 include("SEI.jl")
 include("LithiumPlating.jl")
 include("ParticleCracking.jl")
+include("LAM.jl")
 
 function abort!(mod,obs,ctx,int)
     ModelingToolkit.terminate!(int)
@@ -37,6 +38,12 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
     g = build_fvm_geometry(params, N)
     
+    if Q==0
+        Q = params.Q₀
+    end
+    # Scale the current density to the electrode area
+    A = params.Hcc*params.Wcc*params.n_el*(Q/params.Q₀)
+    
     # Electrical ports
     @named p = Pin()
     @named n = Pin()
@@ -48,10 +55,15 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named el = Electrolyte(p=params.e, g=g.el)
     @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
     @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, g=g) 
-    @named cracking = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, g=g)
+    @named cracking_n = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, g=g)
+    @named cracking_p = ParticleCracking.SwellingOnly(p=params.n.side_reactions[1], s=params.p, g=g)
 
-    submodels = [p,n,T,pe,ne,el,sei,plating,cracking]
+    @named lam_n = LAM.StressDriven(p=params.n.side_reactions[1], s=params.n, V=params.e.Lₙ*A, g=g)
+    @named lam_p = LAM.StressDriven(p=params.n.side_reactions[1], s=params.p, V=params.e.Lₚ*A, g=g)
 
+
+    submodels = [p,n,T,pe,ne,el,sei,plating,cracking_n,cracking_p,lam_n,lam_p]
+    
     @variables begin
         # Terminal voltage and current
         v(t)
@@ -74,8 +86,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         j̄ₚ0(t)
         ϕ̄ₙ(t)
         ϕ̄ₚ(t)
-        aₙ(t), [guess=3*(1-params.e.ϵₙ)/params.n.Rₖ]
-        aₚ(t)
+        Cₙ(t) # Negative electrode capacity in Ah
+        Cₚ(t) # Positive electrode capacity in Ah
         Q_loss(t)
         Q_Ah(t) = 0
         Qt_Ah(t) = 0
@@ -86,13 +98,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         Rᵢ(t)
     end
-
-    if Q==0
-        Q = params.Q₀
-    end
     
-    # Scale the current density to the electrode area
-    A = params.Hcc*params.Wcc*params.n_el*(Q/params.Q₀)
     i_app = i/A
 
     # X-average
@@ -113,8 +119,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
     
     # Overpotentials from the inverse Butler-Volmer equation
-    ηᵣn = [2*R*T.u/F*asinh((i_app/params.e.Lₙ/aₙ)/(2*jₙ0[i])) for i in 1:Nn]
-    ηᵣp = [2*R*T.u/F*asinh((-i_app/params.e.Lₚ/aₚ)/(2*jₚ0[i])) for i in 1:Np]
+    ηᵣn = [2*R*T.u/F*asinh((i_app/params.e.Lₙ/ne.aₖ)/(2*jₙ0[i])) for i in 1:Nn]
+    ηᵣp = [2*R*T.u/F*asinh((-i_app/params.e.Lₚ/pe.aₖ)/(2*jₚ0[i])) for i in 1:Np]
 
     # ηᵣ_n = ηᵣ_x(params.n, cₙ, el.cₑ[g.el.ixₙ], ne.T.u, ne.J.u)
     # ηᵣ_p = ηᵣ_x(params.p, cₚ, el.cₑ[g.el.ixₚ], pe.T.u, pe.J.u)
@@ -132,7 +138,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         # temp
         aj_tot_ne ~ i_app/params.e.Lₙ,
-        j_tot_ne ~ aj_tot_ne/aₙ,
+        j_tot_ne ~ aj_tot_ne/ne.aₖ,
 
         ## Potentials ##
         U₀ ~ pe.U₀ - ne.U₀,
@@ -153,7 +159,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
         ϕ̄ₚ ~ sum(ϕₚ)/Np,
-        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x + cracking.ϕf_x,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x + cracking_n.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
 
         v ~ p.v - n.v,
@@ -166,45 +172,62 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.ϕₛn.u ~ ϕ̄ₙ,
         el.Δϕₙ.u ~ ne.U₀ + ηᵣ̅n - sei.ϕf_x,
 
-        ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/aₙ, # Current density in the negative electrode
-        pe.J.u ~  -i_app/params.e.Lₚ/aₚ, # Current density in the positive electrode
-        
-        aₙ ~ 3*(1-params.e.ϵₙ)/params.n.Rₖ,
-        aₚ ~ params.p.aₖ,
+        ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/ne.aₖ, # Current density in the negative electrode
+        pe.J.u ~  -i_app/params.e.Lₚ/pe.aₖ, # Current density in the positive electrode
 
         # # Ne sei reaction
         sei.J.u ~ ne.J.u, # Current density for SEI side reaction
         sei.T.u ~ T.u,
-        sei.aₖ.u ~ aₙ,
+        sei.aₖ.u ~ ne.aₖ,
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
 
         # # Li plating
         plating.J.u ~ne.J.u,
         plating.T.u ~ T.u,
-        plating.aₖ.u ~ aₙ,
+        plating.aₖ.u ~ ne.aₖ,
         [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
         plating.η_sei.u ~ sei.ϕf,
         [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,
 
         ## Cracking
-        cracking.J.u ~ ne.J.u,
-        cracking.T.u ~ T.u,
-        cracking.aₖ.u ~ aₙ,
-        [cracking.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
-        cracking.c_s_r.u ~ ne.c_r,
-        cracking.c_s_surf.u ~ ne.c_surf,
+        cracking_n.J.u ~ ne.J.u,
+        cracking_n.T.u ~ T.u,
+        cracking_n.aₖ.u ~ ne.aₖ,
+        [cracking_n.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        cracking_n.c_s_r.u ~ ne.c_r,
+        cracking_n.c_s_surf.u ~ ne.c_surf,
 
+        cracking_p.J.u ~ pe.J.u,
+        cracking_p.T.u ~ T.u,
+        cracking_p.aₖ.u ~ pe.aₖ,
+        [cracking_p.Δϕₛ.u[i] ~ ϕₚ[i] + el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
+        cracking_p.c_s_r.u ~ pe.c_r,
+        cracking_p.c_s_surf.u ~ pe.c_surf,
+
+        ## LAM
+        lam_n.σₜ.u ~ cracking_n.σₜ,
+        lam_n.σᵣ.u ~ cracking_n.σᵣ,
+        lam_n.c_r.u ~ ne.c_r,
+        Dt(ne.ϵₛ) ~ lam_n.j_lam,
+        
+        lam_p.σₜ.u ~ cracking_p.σₜ,
+        lam_p.σᵣ.u ~ cracking_p.σᵣ,
+        lam_p.c_r.u ~ pe.c_r,
+        Dt(pe.ϵₛ) ~ lam_p.j_lam,
         
         # Porosity (assumed constant)
-        [el.ϵ[i] ~ params.e.ϵₙ - aₙ*(
+        [el.ϵ[i] ~ params.e.ϵₙ - ne.aₖ*(
             sei.L_sei[i] - params.n.L_sei₀ 
             + plating.L_plating[i] 
             + plating.L_dead[i]
-             + cracking.L_sei[i]*(cracking.r_surf - 1)
+             + cracking_n.L_sei[i]*(cracking_n.r_surf - 1)
             ) for i in g.el.ixₙ]...,
         [el.ϵ[i] ~ params.e.ϵₛ for i in g.el.ixₛ]...,
         [el.ϵ[i] ~ params.e.ϵₚ for i in g.el.ixₚ]...,
+
+        Cₚ ~ pe.ϵₛ*params.e.Lₚ * A * params.p.c₊ * F / 3600,
+        Cₙ ~ ne.ϵₛ*params.e.Lₙ * A * params.n.c₊ * F / 3600,
 
         Q_loss ~ sei.Q_loss + plating.Q_loss,
 

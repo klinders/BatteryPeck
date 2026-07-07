@@ -40,7 +40,6 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     # Time derivative operator
     Dt = Differential(t)
-    @show(p.c₀)
 
     @variables begin
         # I am adding two ghost nodes for the boundary conditions
@@ -54,6 +53,8 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         U₀(t)
         z(t)
         ϕ̄ₛ(t)
+        ϵₛ(t) = p.ϵₛ # active material volume fraction
+        aₖ(t) # specific surface area
     end
 
     # Discretized equations
@@ -77,6 +78,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
         c_surf ~ 1.5*c[end] - 0.5*c[end-1] # Surface concentration
         z ~ c_surf/p.c₊ # Stoichiometry
         U₀ ~ p.Uₖ(z) # Open-circuit potential
+        aₖ ~ 3*ϵₛ/p.Rₖ # Specific surface area
 
         # Boundary condition center
         Dt(c[1]) ~ (Dᵣ[1]*Aᵣ[1]*(c[2] - c[1])/Δr)/Vᵢ[1]

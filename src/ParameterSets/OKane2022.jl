@@ -22,6 +22,7 @@ sei_parameters = SideReactionParameters(
 
 n = SolidParticleParameters(
     Rₖ = 5.86e-6, # Radius of the electrode in m
+    ϵₛ = 0.75, # Active material volume fraction
     aₖ = 383960, # Surface area density in m^-1
     Dₖ = (c,T) -> 3.3e-14*exp(3.03e4/8.314*(1/298.15-1/T)), # electrode diffusivity in m^2*s^-1
     σₖ = 215, # Conductivity in S*m^-1
@@ -36,11 +37,15 @@ n = SolidParticleParameters(
     Ω = 3.1e-06, # pos: 1.25e-05 (parial molar volume)
     E = 1.5e10, # pos: 3.75e11 (Youngs modulus)
     ν = 0.3, # pos: 0.2 (poissons ratio)
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 60000000.0, # Critical stress for LAM
     side_reactions = [sei_parameters]
 )
 
 p = SolidParticleParameters(
     Rₖ = 5.22e-6, # Radius of the electrode in m
+    ϵₛ = 0.665, # Active material volume fraction
     aₖ = 3.82e5, # Surface area density in m^-1
     Dₖ = (c,T) -> (4.0e-15)*exp(25000/8.314*(1/298.15-1/T)), # electrode diffusivity in m^2*s^-1
     σₖ = 0.18, # Conductivity in S*m^-1
@@ -55,6 +60,9 @@ p = SolidParticleParameters(
     Ω = 1.25e-05, # pos: 1.25e-05 (parial molar volume)
     E = 3.75e11, # pos: 3.75e11 (Youngs modulus)
     ν = 0.2, # pos: 0.2 (poissons ratio)
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 375000000.0, # Critical stress for LAM
 )
 
 e = ElectrolyteParameters(

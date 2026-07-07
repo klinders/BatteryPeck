@@ -98,6 +98,7 @@ Parameters describing lithium-ion electrode (active material particle) propertie
 """
 Base.@kwdef mutable struct SolidParticleParameters
     Rₖ # Radius of the electrode in m
+    ϵₛ # Active material volume fraction
     aₖ # Surface area density in m^-1
     Dₖ # electrode diffusivity in m^2*s^-1
     σₖ # Conductivity in S*m^-1
@@ -111,6 +112,9 @@ Base.@kwdef mutable struct SolidParticleParameters
     Ω # parial molar volume
     E # Youngs modulus
     ν # poissons ratio
+    β_LAM # LAM rate constant
+    m_LAM # LAM stress exponent
+    stress_critical # Critical stress for LAM
 
     side_reactions::Vector{SideReactionParameters} = SideReactionParameters[]
 end
