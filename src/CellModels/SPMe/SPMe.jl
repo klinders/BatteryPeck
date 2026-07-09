@@ -53,10 +53,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
-    @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, g=g) # Assuming first side reaction is SEI
-    @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, g=g) 
-    @named cracking_n = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, g=g)
-    @named cracking_p = ParticleCracking.SwellingOnly(p=params.n.side_reactions[1], s=params.p, g=g)
+    @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, V=params.e.Lₙ*A, g=g) # Assuming first side reaction is SEI
+    @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, V=params.e.Lₙ*A, g=g) 
+    @named cracking_n = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, V=params.e.Lₙ*A, g=g)
+    @named cracking_p = ParticleCracking.SwellingOnly(p=params.n.side_reactions[1], s=params.p, V=params.e.Lₚ*A, g=g)
 
     @named lam_n = LAM.StressDriven(p=params.n.side_reactions[1], s=params.n, V=params.e.Lₙ*A, g=g)
     @named lam_p = LAM.StressDriven(p=params.n.side_reactions[1], s=params.p, V=params.e.Lₚ*A, g=g)
@@ -230,7 +230,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Cₚ ~ pe.ϵₛ*params.e.Lₚ * A * params.p.c₊ * F / 3600,
         Cₙ ~ ne.ϵₛ*params.e.Lₙ * A * params.n.c₊ * F / 3600,
 
-        Q_loss ~ sei.Q_loss + plating.Q_loss + cracking_n.Q_sei + lam_n.Q_loss + lam_p.Q_loss,
+        Q_loss ~ sei.Q_loss + plating.Q_loss + cracking_n.Q_sei,# + lam_n.Q_loss + lam_p.Q_loss,
 
         C_cell ~ Q - Q_loss,
 

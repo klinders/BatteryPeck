@@ -113,7 +113,7 @@ The SEI current density follows Butler-Volmer kinetics. Use when SEI growth is f
 # Physical Assumption
 Reaction rate dominates over diffusion; film acts as perfect ionic conductor.
 """
-function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
+function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters,V ,g)
     
     @parameters begin
         t
@@ -247,7 +247,7 @@ and decreasing solvent diffusion. Use when film resistance dominates over reacti
 # Physical Assumption
 Film diffusion resistance and potential drop dominate; SEI growth self-limits via thickness.
 """
-function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
+function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, V, g)
     
     @parameters begin
         t
@@ -350,7 +350,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
         ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
-        Q_sei ~ (c_sei_x-c_sei₀)*p.V̄*p.z*F/3600,
+        Q_sei ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
     ]
 
     System(eqns,t; name=name,systems=[J, T, Δϕₛ, aₖ, c_s_r, c_s_surf])

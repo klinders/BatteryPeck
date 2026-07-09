@@ -105,7 +105,7 @@ plating is the primary failure mechanism.
 - `c_dead`: Dead lithium (irreversibly lost from battery)
 - `j_stripping`: Always zero (no reversibility)
 """
-function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
+function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, V, g)
     
     @parameters begin
         t
@@ -130,7 +130,6 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
     α_stripping = 1 - α_plating
     k_plating = 1e-9
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
-    Vk = 0.065*1.58*g.el.Ls[1] # Volume of electrode
 
     j_strip0 = F*k_plating*1000
 
@@ -183,7 +182,7 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
         η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
         η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
         Q_plating ~ c_plating_x*Vk*F/3600,
-        Q_dead ~ c_dead_x*Vk*F/3600,
+        Q_dead ~ c_dead_x*V*F/3600,
         Q_loss ~ Q_plating + Q_dead
     ]
 
@@ -220,7 +219,7 @@ Use for realistic simulations where partial reversibility and cycling damage occ
 Repeated plating/stripping cycles increase dead lithium fraction, modeling accelerated
 degradation under abuse conditions.
 """
-function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, g)
+function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolkit.SolidParticleParameters, V, g)
     
     @parameters begin
         t
@@ -246,7 +245,6 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     α_stripping = 1 - α_plating
     k_plating = 1e-9
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
-    Vk = 0.065*1.58*g.el.Ls[1] # Volume of electrode
 
     j_strip0 = F*k_plating*1000
     
@@ -308,8 +306,8 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
         η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
         
-        Q_plating ~ c_plating_x*Vk*F/3600,
-        Q_dead ~ c_dead_x*Vk*F/3600,
+        Q_plating ~ c_plating_x*V*F/3600,
+        Q_dead ~ c_dead_x*V*F/3600,
         Q_loss ~ Q_plating + Q_dead
     ]
 
