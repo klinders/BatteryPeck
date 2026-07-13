@@ -204,7 +204,7 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
     N = g.el.Nx[1]
 
     @named J = RealInput()
-    @named T = RealInput()
+    @named T = RealInput(guess=298.15)
     @named Δϕₛ = RealInputArray(nin=N)
     @named aₖ = RealInput(guess=s.aₖ)
 

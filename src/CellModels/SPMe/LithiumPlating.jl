@@ -116,7 +116,7 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
     N = g.el.Nx[1]
 
     @named J = RealInput()
-    @named T = RealInput()
+    @named T = RealInput(guess=298.15)
     @named Δϕₛ = RealInputArray(nin=N)
     @named η_sei = RealInputArray(nin=N)
     @named aₖ = RealInput(guess=s.aₖ)

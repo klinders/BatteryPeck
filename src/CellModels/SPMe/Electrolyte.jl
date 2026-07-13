@@ -46,7 +46,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dt = Differential(t)
 
     @named i_app = RealInput() # Electrolyte current density
-    @named T = RealInput()
+    @named T = RealInput(guess=298.15)
     @named Δϕₙ = RealInput(guess=0.0)
     @named ϕₛn = RealInput(guess=0.0)
 

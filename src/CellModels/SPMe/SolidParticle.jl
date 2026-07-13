@@ -36,7 +36,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
     F = 96485 # Faraday's constant
 
     @named J = RealInput()
-    @named T = RealInput()
+    @named T = RealInput(guess=298.15)
 
     # Time derivative operator
     Dt = Differential(t)
