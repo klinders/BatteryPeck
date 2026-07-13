@@ -16,6 +16,11 @@ include("CellModels/SPMe/SPMe.jl")
 
 export SPMe
 
+include("ThermalModels/ConstantTemperature.jl")
+include("ThermalModels/AmbientTemperature.jl")
+
+export ConstantTemperature
+
 include("experiment.jl")
 
 export Experiment,AbstractStep,PowerStep,CurrentStep,DriveStep,RestStep,ChargeStep,step!, get_p0

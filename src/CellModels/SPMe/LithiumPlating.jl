@@ -137,8 +137,8 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
         # Plating concentration
         (c_plating(t))[1:N] = 0
         (c_dead(t))[1:N] = 0
-        (L_plating(t))[1:N] = 0
-        (L_dead(t))[1:N] = 0
+        (L_plating(t))[1:N]
+        (L_dead(t))[1:N]
         (j_stripping(t))[1:N], [guess=j_strip0]
         (ϕf(t))[1:N]
         (η_plating(t))[1:N]
@@ -252,8 +252,8 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         # Plating concentration
         (c_plating(t))[1:N] = 0
         (c_dead(t))[1:N] = 0
-        (L_plating(t))[1:N] = 0
-        (L_dead(t))[1:N] = 0
+        (L_plating(t))[1:N]
+        (L_dead(t))[1:N]
         (j_stripping(t))[1:N], [guess=j_strip0]
         (ϕf(t))[1:N]
         (η_plating(t))[1:N]

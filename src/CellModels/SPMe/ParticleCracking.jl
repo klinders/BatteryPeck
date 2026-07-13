@@ -153,7 +153,7 @@ function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     )
     
     @variables begin
-        l_cr(t) = 0
+        l_cr(t)
         r_surf(t)
         a_cr(t)
         σₜ(t)

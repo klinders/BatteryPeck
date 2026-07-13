@@ -137,14 +137,16 @@ struct Experiment
     step_count::Int64
     p0::Float64
     start_time::DateTime
-    Experiment(steps::Vector{T} where T<:AbstractStep, start_time::DateTime=DateTime(2020, 1, 1)) = begin
+    end_time::DateTime
+    Experiment(steps::Vector{T} where T<:AbstractStep; start_time::DateTime=DateTime(2020, 1, 1)) = begin
         tstops = cumsum([s.period for s in steps])
         tend = tstops[end]
+        end_time = start_time + Dates.Second(tend)
         # Remove the last Tstop since it is the end of the simulation
         pop!(tstops)
         step_count = length(steps)
         p0 = get_p0(steps[1])
-        return new(steps, tstops, tend, step_count, p0, start_time)
+        return new(steps, tstops, tend, step_count, p0, start_time, end_time)
     end
 end
 

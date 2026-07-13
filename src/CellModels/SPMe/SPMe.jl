@@ -183,7 +183,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
 
         # # Li plating
-        plating.J.u ~ne.J.u,
+        plating.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
         plating.T.u ~ T.u,
         plating.aₖ.u ~ ne.aₖ,
         [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
@@ -192,14 +192,14 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,
 
         ## Cracking
-        cracking_n.J.u ~ ne.J.u,
+        cracking_n.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
         cracking_n.T.u ~ T.u,
         cracking_n.aₖ.u ~ ne.aₖ,
         [cracking_n.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
         cracking_n.c_s_r.u ~ ne.c_r,
         cracking_n.c_s_surf.u ~ ne.c_surf,
 
-        cracking_p.J.u ~ pe.J.u,
+        cracking_p.J.u ~ -i_app/params.e.Lₚ/pe.aₖ,
         cracking_p.T.u ~ T.u,
         cracking_p.aₖ.u ~ pe.aₖ,
         [cracking_p.Δϕₛ.u[i] ~ ϕₚ[i] + el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
@@ -230,7 +230,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Cₚ ~ pe.ϵₛ*params.e.Lₚ * A * params.p.c₊ * F / 3600,
         Cₙ ~ ne.ϵₛ*params.e.Lₙ * A * params.n.c₊ * F / 3600,
 
-        Q_loss ~ sei.Q_loss + plating.Q_loss + cracking_n.Q_sei,# + lam_n.Q_loss + lam_p.Q_loss,
+        Q_loss ~ sei.Q_loss + plating.Q_loss + cracking_n.Q_sei + lam_n.Q_loss + lam_p.Q_loss,
 
         C_cell ~ Q - Q_loss,
 

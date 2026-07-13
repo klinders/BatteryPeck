@@ -28,7 +28,7 @@ sol = simulate(sys, exp, Rodas4())
 """
 function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, args...; kwargs...)
     
-    prob = ODEProblem(sys, [sys.Pin=>experiment.p0], (0.0,experiment.tend))
+    prob = ODEProblem(sys, [sys.Pin=>experiment.p0, sys.Iin=>0], (0.0,experiment.tend))
     integrator = init(prob,args...; tstops=experiment.tstops, save_everystep=false, kwargs...)
 
     time_scale, time_unit, time_symbol = format_time(experiment.tend)
@@ -50,6 +50,7 @@ function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, a
         # Check if battery hit safety limit
         if integrator.sol.retcode != SciMLBase.ReturnCode.Success
             println("[!] Simulation aborted at t = $(integrator.t)s. Stopping experiment early.")
+            println(integrator.sol.retcode)
             break
         end
 

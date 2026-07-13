@@ -117,7 +117,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     ]
 
     # Electrolyte potential drop
-    B = [p.σₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
+    B = [p.σₑ(cₑ[i], T.u)*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
     f1 = [iₑ(x[i])/B[i] for i in 1:g.Nₜ]
 
     ϕₑ_r = cumsum([
@@ -130,7 +130,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     # Electrolyte reaction potential
     df_fac = ones(length(cₑ))
 
-    Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
+    Dᵢ = [p.Dₑ(cₑ[i], T.u)*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
     Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
 
@@ -138,9 +138,9 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Nᵣ = [[-Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] + p.t₊(cₑ[i])*iₑ(xᵣ[i])/F for i in 1:g.Nₜ-1]..., 0]
 
     # Effective electrolyte conductivity
-    κₙ = p.σₑ(c̄ₑ)*(ϵ̄ₙ^p.bₙ)
-    κₛ = p.σₑ(c̄ₑ)*(ϵ̄ₛ^p.bₛ)
-    κₚ = p.σₑ(c̄ₑ)*(ϵ̄ₚ^p.bₚ)
+    κₙ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₙ^p.bₙ)
+    κₛ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₛ^p.bₛ)
+    κₚ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₚ^p.bₚ)
 
     # phi_e max 1e15
     function M(x)

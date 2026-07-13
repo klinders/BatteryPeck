@@ -1,6 +1,7 @@
 using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
+using DataFrames
 
 """
     SingleCellPack(; name, params=Chen2020(), config=(96,3), Qcell=5)
@@ -29,7 +30,7 @@ params = OKane2022()
 pack = SingleCellPack(name=:pack, params=params, config=(96,3), Qcell=5)
 ```
 """
-function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.15, kargs...)
+function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T::Union{Real,DataFrame}=298.15, kargs...)
 
     @parameters begin
         t # Time variable
@@ -40,7 +41,6 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.
     @variables begin 
         Pin(t)=0, [input=true]
         Iin(t)=0, [input=true]
-        Tin(t)=T, [input=true]
         V(t)
         I(t)
     end
@@ -48,7 +48,15 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.
     @named cell = SPMe(params=params, Q=Qcell) # Battery cell model
     @named power = RealInput(guess=0)
     @named current = RealInput(guess=0)
-    @named temp = RealInput(guess=T)
+
+    if isa(T, Number)
+        @named temp = ConstantTemperature(T=T)
+    elseif isa(T, DataFrames.AbstractDataFrame)
+        @named temp = AmbientTemperature(T=T)
+    else 
+        @error "Temperature must be number or DataFrame"
+    end
+    
     @named source = Current()
     @named ground = Ground()
 
@@ -57,15 +65,13 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.
         I ~ config[2]*cell.i
         D(Pin) ~ 0
         D(Iin) ~ 0
-        D(Tin) ~ 0
         power.u ~ Pin
         current.u ~ Iin
-        temp.u ~ Tin
 
         connect(source.n, cell.n)
         connect(source.p, cell.p)
         connect(ground.g, source.n)
-        connect(temp, cell.T)
+        connect(cell.T, temp.output)
 
         source.I.u ~ power.u/config[1]/config[2]/cell.v + current.u/config[2]
     ]
