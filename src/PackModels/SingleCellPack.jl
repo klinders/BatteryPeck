@@ -29,7 +29,7 @@ params = OKane2022()
 pack = SingleCellPack(name=:pack, params=params, config=(96,3), Qcell=5)
 ```
 """
-function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.15)
+function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.15, kargs...)
 
     @parameters begin
         t # Time variable
@@ -70,5 +70,5 @@ function SingleCellPack(;name, params=Chen2020(), config=(96,3), Qcell=5, T=298.
         source.I.u ~ power.u/config[1]/config[2]/cell.v + current.u/config[2]
     ]
 
-    return System(eqs, t; systems=[cell, power, temp, source, ground], name=name)
+    return System(eqs, t; systems=[cell, power, temp, source, ground], name=name, kargs...)
 end
