@@ -47,8 +47,8 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     @named i_app = RealInput() # Electrolyte current density
     @named T = RealInput(guess=298.15)
-    @named Δϕₙ = RealInput(guess=0.0)
-    @named ϕₛn = RealInput(guess=0.0)
+    @named Δϕₙ = RealInput()
+    @named ϕₛn = RealInput()
 
     @variables begin
         # Electrolyte concentration in mol*m^-3

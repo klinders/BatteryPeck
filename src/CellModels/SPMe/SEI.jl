@@ -240,7 +240,7 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
-        [ϕf[i] ~ J.u*L_sei[i]*p.R for i in 1:N]...,
+        [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
@@ -272,8 +272,8 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
 
     c_sei₀ = p.Lf₀/p.V̄*s.aₖ
     c_ec_0 = 4541.0
-    D_ec = 1.75e-19
-    k_sei = 2.76e-16
+    D_ec = 2e-18
+    k_sei = 1e-12
 
     @variables begin
         # EC concentration
@@ -285,6 +285,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         (L_sei(t))[1:N], [guess=ones(N)*p.Lf₀]
 
         c_sei_x(t)
+        c_ec_x(t)
         L_sei_x(t), [guess=p.Lf₀]
         j_sei_x(t), [guess=0]
         ϕf_x(t), [guess=0]
@@ -297,19 +298,23 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
     )
 
     η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
-    
+
+    k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
+    L_over_D = [L_sei[i]/D_ec for i in 1:N]
+
     eqns = [
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        [j_sei[i] ~ -c_ec[i]*k_sei*exp(-p.α*F/R/T.u*η_sei[i])*arrhenius for i in 1:N]...,
-        [c_ec[i] ~ c_ec_0 + L_sei[i]/D_ec*j_sei[i] for i in 1:N]...,
+        [j_sei[i] ~ -F*c_ec_0*k_exp[i]/(1 + L_over_D[i]*k_exp[i])*arrhenius for i in 1:N]...,
+        [c_ec[i] ~ c_ec_0/(1 + L_over_D[i]*k_exp[i]) for i in 1:N]...,
 
-        [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/p.z for i in 1:N]...,
+        [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
-        [ϕf[i] ~ J.u*L_sei[i]*p.R for i in 1:N]...,
+        [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
+        c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
         ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
         Q_loss ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,

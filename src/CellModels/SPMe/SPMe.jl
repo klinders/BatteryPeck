@@ -41,6 +41,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     if Q==0
         Q = params.Q₀
     end
+
+    Nn = length(g.el.ixₙ)
+    Np = length(g.el.ixₚ)
+
     # Scale the current density to the electrode area
     A = params.Hcc*params.Wcc*params.n_el*(Q/params.Q₀)
     
@@ -53,7 +57,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     @named pe = SolidParticle(p=params.p, g=g.pe)
     @named ne = SolidParticle(p=params.n, g=g.ne)
     @named el = Electrolyte(p=params.e, g=g.el)
-    @named sei = SEI.SolventDiffusionLimitedSEI(p=params.n.side_reactions[1],s=params.n, V=params.e.Lₙ*A, g=g) # Assuming first side reaction is SEI
+    @named sei = SEI.ECReactionLimitedSEI(p=params.n.side_reactions[1],s=params.n, V=params.e.Lₙ*A, g=g) # Assuming first side reaction is SEI
     @named plating = LithiumPlating.PartiallyReversiblePlating(p=params.n.side_reactions[1],s=params.n, V=params.e.Lₙ*A, g=g) 
     @named cracking_n = ParticleCracking.SwellingAndCracking(p=params.n.side_reactions[1], s=params.n, V=params.e.Lₙ*A, g=g)
     @named cracking_p = ParticleCracking.SwellingOnly(p=params.n.side_reactions[1], s=params.p, V=params.e.Lₚ*A, g=g)
@@ -74,10 +78,15 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ηᵣ(t)
         ηᵣ̅n(t)
         ηᵣ̅p(t)
-        (ηₙ(t))[1:g.el.Nx[1]]
-        (ηₚ(t))[1:g.el.Nx[3]]
+        (ηₙ(t))[1:Nn]
+        (ηₚ(t))[1:Np]
         Δϕₛ(t), [guess=0]
+        (Δϕₙ(t))[1:Nn], [guess=fill(params.n.Uₖ(params.n.c₀/params.n.c₊), Nn)]
+        (Δϕₚ(t))[1:Np], [guess=fill(params.p.Uₖ(params.p.c₀/params.p.c₊), Np)]
+
         # Δϕf(t)
+        Δϕₙ_x(t)
+        Δϕₙ_x2(t)
         (ϕₙ(t))[1:g.el.Nx[1]]
         (ϕₚ(t))[1:g.el.Nx[3]]
         (jₙ0(t))[1:g.el.Nx[1]]
@@ -113,8 +122,6 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     F = 96485 # Faraday's constant
     # jₙ0 = [params.n.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.n.c₊-cₛ[i])) for i in g.el.ixₙ]
     # jₚ0 = [params.p.mₖ*sqrt(el.cₑ[i]*cₛ[i]*(params.p.c₊-cₛ[i])) for i in g.el.ixₚ]
-    Nn = length(g.el.ixₙ)
-    Np = length(g.el.ixₚ)
 
     # asin_n = [asinh(ne.J.u/params.n.aₖ/jₙ0[i]) for i in 1:Nn]
     # asin_p = [asinh(pe.J.u/params.p.aₖ/jₚ0[i]) for i in 1:Np]
@@ -167,26 +174,31 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         0 ~ p.i + n.i,
         i ~ p.i,
 
+        # Potential differences
+        [Δϕₙ[i] ~ ne.U₀ + ηᵣn[i] - sei.ϕf_x for i in 1:Nn]...,
+        [Δϕₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
+        Δϕₙ_x ~ sum(Δϕₙ)/Nn,
+
         # Electrolyte current density
         el.i_app.u ~ i_app,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
-        el.Δϕₙ.u ~ ne.U₀ + ηᵣ̅n - sei.ϕf_x,
+        el.Δϕₙ.u ~ Δϕₙ_x,
 
         ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/ne.aₖ, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/pe.aₖ, # Current density in the positive electrode
 
         # # Ne sei reaction
-        sei.J.u ~ ne.J.u, # Current density for SEI side reaction
+        sei.J.u ~ i_app/params.e.Lₙ/ne.aₖ, # Current density for SEI side reaction
         sei.T.u ~ T.u,
         sei.aₖ.u ~ ne.aₖ,
-        [sei.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        sei.Δϕₛ.u ~ Δϕₙ,
 
         # # Li plating
         plating.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
         plating.T.u ~ T.u,
         plating.aₖ.u ~ ne.aₖ,
-        [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[i] for i in 1:Nn]...,
+        [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
         plating.η_sei.u ~ sei.ϕf,
         [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,

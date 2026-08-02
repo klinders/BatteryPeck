@@ -284,6 +284,9 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     l_cr_0 = 2e-8
     L₀ = 5e-13
     c_sei₀ = L₀/p.V̄*s.aₖ
+    c_ec_0 = 4541.0
+    D_ec = 2e-18
+    k_sei = 1e-12
     
     # All SEI growth mechanisms assumed to have Arrhenius dependence
     arrhenius = exp(
@@ -299,6 +302,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         u_d(t)
         
         # SEI concentration
+        (c_ec(t))[1:N], [guess=ones(N)*c_ec_0]
         (c_sei(t))[1:N] = c_sei₀
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
@@ -311,6 +315,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         σᵣ_x(t)
         u_d_x(t)
 
+        c_ec_x(t)
         c_sei_x(t)
         L_sei_x(t)
         j_sei_x(t)
@@ -319,6 +324,11 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     end
 
     dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr* sqrt(pi*l_cr), 0)
+
+    η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
+
+    k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
+    L_over_D = [L_sei[i]/D_ec for i in 1:N]
 
     eqns = [
 
@@ -332,7 +342,10 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
 
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
-        [j_sei[i] ~ -p.D_sol*p.c_sol*F/L_sei[i]*arrhenius for i in 1:N]...,
+        # Scott Marquis thesis (eq. 5.92)
+        # Exchange current density
+        [j_sei[i] ~ -F*c_ec_0*k_exp[i]/(1 + L_over_D[i]*k_exp[i])*arrhenius for i in 1:N]...,
+        [c_ec[i] ~ c_ec_0/(1 + L_over_D[i]*k_exp[i]) for i in 1:N]...,
 
         [Dt(c_sei[i]) ~ -a_cr*j_sei[i]/(F*p.z) for i in 1:N]...,
         [L_sei[i] ~ c_sei[i]*p.V̄/a_cr for i in 1:N]...,
@@ -347,6 +360,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         u_d_x ~ u_d,
 
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
+        c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
         ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
