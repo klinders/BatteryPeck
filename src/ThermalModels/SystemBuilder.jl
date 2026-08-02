@@ -30,13 +30,12 @@ Provide dynamic mass flow rate and inlet temperature boundary condition.
 @component function FluidSource(; name, m_flow_val, T_val)
     @named port = FluidPort()
     
-    # Define boundaries as parameters to allow callback intervention
+    # Define boundaries as parameters to allow callback intervention and apply mass flow and temperature port constraints
     @parameters begin
         m_flow_in = m_flow_val
         T_inlet = T_val
     end
     
-    # Apply mass flow and temperature port constraints
     eqs = [
         port.m_flow ~ -m_flow_in, 
         port.T ~ T_inlet
@@ -72,26 +71,29 @@ Editable values:
 end
 
 """
-    build_pack_system(name::Symbol, geom, params::PackParameters)
+    build_pack_system(name::Symbol, geom, params::PackParameters; R_axial_val=0.25, R_radial_val=0.2, R_contact_val=4.0)
 
 Construct complete ODESystem containing cells, casing, fluid nodes, and thermal connections.
 
 Implements advanced casing heat rejection and intercellular gap resistances.
 
 Editable values:
-`R_radial_val`:  Transverse conduction override. Cell to cell conduction.
+`R_radial_val`: Transverse conduction override. Cell to cell conduction.
 `R_contact_val`: Thermal resistance between cell and cooling ribbon.
+`R_axial_val`: Axial thermal resistance.
 
 # Arguments
 - `name::Symbol`: Base name for constructed system
 - `geom`: Pack geometry structure containing coordinates and edges
 - `params::PackParameters`: Struct containing physical and thermal properties
+- `R_axial_val`: Axial thermal resistance value
+- `R_radial_val`: Radial thermal resistance value
+- `R_contact_val`: Contact thermal resistance value
 
 # Returns
 - Complete coupled ODE system representing battery pack
 """
-function build_pack_system(name::Symbol, geom, params::PackParameters)
-    
+function build_pack_system(name::Symbol, geom, params::PackParameters; R_axial_val=0.25, R_radial_val=0.2, R_contact_val=4.0)
     # Count elements and calculate total cooling channel length to determine individual node lengths
     num_cells = length(geom.cell_coords)
     num_tms_nodes = length(geom.tms_coords)
@@ -134,13 +136,10 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
     push!(eqs, connect(casing_mass.port, casing_convection.port_a))
     push!(eqs, connect(casing_convection.port_b, ambient_temp.port))
     
-    # Retain potting bottleneck for active scenario as cells are physically embedded
+    # Retain potting bottleneck as cells are physically embedded and connect cells to casing via axial thermal resistors
     cell_diameter = 0.021
     cell_face_area = pi * (cell_diameter / 2.0)^2
-    # R_axial_val = params.axial_potting_thickness / (params.potting_material.thermal_conductivity * (2 * cell_face_area))
-    R_axial_val = 0.25
-
-    # Connect cells to casing via axial thermal resistors
+    
     axial_resistors = [ThermalResistor(name=Symbol("R_ax_$i"), R=R_axial_val) for i in 1:num_cells]
     
     for i in 1:num_cells
@@ -148,14 +147,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
         push!(eqs, connect(axial_resistors[i].port_b, casing_mass.port))
     end
     
-    # Override transverse conduction
-    # SSCC is continuous 1mm thick aluminium sheet weaving through pack
-    # Override silicone potting resistance to simulate highly conductive metal highway
-    # Allows heat to more easily short-circuit between rows and prevents artificial downstream bottlenecking
-    R_radial_val = 0.2
-    # 0.027 old
-    
-    # Connect adjacent cells via gap resistors
+    # Override transverse conduction to simulate highly conductive metal highway and connect adjacent cells via gap resistors
     gap_resistors = [ThermalResistor(name=Symbol("R_gap_$idx"), R=R_radial_val) for idx in 1:length(geom.cell_edges)]
     
     for (idx, edge) in enumerate(geom.cell_edges)
@@ -164,11 +156,7 @@ function build_pack_system(name::Symbol, geom, params::PackParameters)
         push!(eqs, connect(gap_resistors[idx].port_b, cells[c2].port_shell))
     end
     
-    # Tunable contact resistance between cell and cooling ribbon
-    R_contact_val = 4
-    # 3.5 old
-    
-    # Connect cells to TMS nodes via contact resistors
+    # Connect cells to TMS nodes via tunable contact resistors
     contact_resistors = [ThermalResistor(name=Symbol("R_contact_$idx"), R=R_contact_val) 
                          for idx in 1:length(geom.convection_edges)]
     

@@ -78,21 +78,21 @@ Base.@kwdef struct PackParameters
 end
 
 """
-    get_coolant_properties(coolant_type::Symbol)
+    get_coolant_properties(coolant_type)
 
 Return baseline fluid properties evaluated at nominal 25°C.
 
+Evaluate and return properties based on specified coolant type. Throw error if unsupported.
+
 # Arguments
-- `coolant_type::Symbol`: Identifier for desired coolant fluid
+- `coolant_type`: Symbol identifier for desired coolant fluid
 
 # Returns
 - Instantiated FluidProperties struct
 """
 function get_coolant_properties(coolant_type::Symbol)
-    # Evaluate and return properties based on specified coolant type
+    # Evaluate properties based on specified coolant type using literature reference data
     if coolant_type == :water_glycol
-        # 50/50 volume ethylene glycol and water mixture at 25°C
-        # Source: 2001 ASHRAE Fundamentals Handbook (SI), Chapter 21
         return FluidProperties(
             density = 1071.11,
             specific_heat = 3300.0,
@@ -100,8 +100,6 @@ function get_coolant_properties(coolant_type::Symbol)
             dynamic_viscosity = 0.00257
         )
     elseif coolant_type == :air
-        # Standard atmospheric air at 300 K
-        # Source: Fundamentals of Heat and Mass Transfer, Appendix A.4
         return FluidProperties(
             density = 1.1614,
             specific_heat = 1007.0,
@@ -109,81 +107,71 @@ function get_coolant_properties(coolant_type::Symbol)
             dynamic_viscosity = 1.846e-5
         )
     elseif coolant_type == :water_nema2026
-        # Pure water properties specifically hardcoded in Nema et al. (2026) Table 1
         return FluidProperties(
             density = 998.0,
             specific_heat = 4180.0,
             thermal_conductivity = 0.61,
             dynamic_viscosity = 0.002 
         )
-    # Handle unsupported coolant types
     else
-        error("Unknown coolant type. Choose :water_glycol or :air.")
+        error("Unknown coolant type")
     end
 end
 
 """
-    get_solid_properties(material_type::Symbol)
+    get_solid_properties(material_type)
 
 Return baseline thermophysical properties for standard pack materials.
 
+Evaluate and return properties based on specified solid material. Throw error if unsupported.
+
 # Arguments
-- `material_type::Symbol`: Identifier for desired solid material
+- `material_type`: Symbol identifier for desired solid material
 
 # Returns
 - Instantiated SolidProperties struct
 """
 function get_solid_properties(material_type::Symbol)
-    # Evaluate and return properties based on specified solid material
+    # Evaluate properties based on specified solid material using material data sheets
     if material_type == :aluminium_6061
-        # Alloy 6061 properties
-        # Source: Bohler Uddeholm Aluminium 6061 Data Sheet
         return SolidProperties(
             density = 2700.0,
             specific_heat = 895.0,
             thermal_conductivity = 166.0
         )
     elseif material_type == :bergquist_tgf_1500
-        # Thermally conductive silicone liquid gap filler
-        # Source: Bergquist Gap Filler TGF 1500 Technical Data Sheet
         return SolidProperties(
             density = 2700.0,
             specific_heat = 1000.0,
             thermal_conductivity = 1.8
         )
     elseif material_type == :aluminium_nema2026
-        # Pure aluminium properties from Nema et al. (2026) Table 1
         return SolidProperties(
             density = 2700.0,
             specific_heat = 900.0,
             thermal_conductivity = 238.0
         )
-    # Handle unsupported material types
     else
-        error("Unknown material type. Choose :aluminium_6061 or :bergquist_tgf_1500.")
+        error("Unknown material type")
     end
 end
 
 """
-    build_pack_parameters(; coolant=:water_nema2026, ambient_temp=298.15, inlet_temp=298.15, flow_rate=0.02994, cell_pitch=0.025, cell_diameter=0.021)
+    build_pack_parameters(; coolant, ambient_temp, inlet_temp, flow_rate, cell_pitch, cell_diameter, h_conv, casing_th)
 
 Generate full parameter set with standard defaults via convenience constructor.
 
-Editable values:
-`coolant`: Alters fluid properties dictionary.
-`ambient_temp`: Sets environmental baseline temperature.
-`inlet_temp`: Sets fluid entry temperature.
-`flow_rate`: Adjusts global mass flow rate.
-`cell_pitch`: Changes physical spacing between cell centres.
-`cell_diameter`: Adjusts active cell diameter for gap calculations.
+Construct and return master parameter set using provided parameters or defaults.
 
 # Arguments
-- `coolant::Symbol`: Identifier for desired coolant fluid
-- `ambient_temp::Float64`: Environmental baseline temperature
-- `inlet_temp::Float64`: Fluid entry temperature
-- `flow_rate::Float64`: Global mass flow rate
-- `cell_pitch::Float64`: Physical spacing between cell centres
-- `cell_diameter::Float64`: Active cell diameter
+- `coolant`: Symbol identifier for desired coolant fluid
+- `ambient_temp`: Float64 environmental baseline temperature
+- `inlet_temp`: Float64 fluid entry temperature
+- `flow_rate`: Float64 global mass flow rate
+- `cell_pitch`: Float64 physical spacing between cell centres
+- `cell_diameter`: Float64 active cell diameter
+- `h_conv`: Float64 ambient convection coefficient
+- `casing_th`: Float64 casing thickness
 
 # Returns
 - Instantiated PackParameters master dictionary
@@ -194,10 +182,12 @@ function build_pack_parameters(;
         inlet_temp::Float64 = 298.15,
         flow_rate::Float64 = 0.02994,
         cell_pitch::Float64 = 0.025,
-        cell_diameter::Float64 = 0.021
+        cell_diameter::Float64 = 0.021,
+        h_conv::Float64 = 5.0,
+        casing_th::Float64 = 0.01
     )
     
-    # Define baseline cooling channel geometry matching Nema 2026 1C/5C validation
+    # Define baseline cooling channel geometry matching validation data
     tms_geom = TMSGeometry(
         channel_width = 0.002,
         channel_height = 0.050,
@@ -215,11 +205,11 @@ function build_pack_parameters(;
         
         cell_gap_thickness = (cell_pitch - cell_diameter) / 2.0,
         axial_potting_thickness = 0.005, 
-        casing_thickness = 0.01,        
+        casing_thickness = casing_th,        
         
         ambient_temperature = ambient_temp,
         inlet_temperature = inlet_temp,
         mass_flow_rate = flow_rate,
-        ambient_convection_coefficient = 5.0 
+        ambient_convection_coefficient = h_conv 
     )
 end

@@ -1,11 +1,7 @@
 # Source [1]: https://doi.org/10.1149/1945-7111/ab9050        # Chen2020 dataset
 # Source [2]: https://doi.org/10.1016/j.electacta.2022.140700 # Regan2022 stoichiometry vs. SoC
 
-# Import base parameters
-# include("Base.jl")
-
-# Import packages
-import NaNMath # Return NaN for log or sqrt of negative one
+import NaNMath
 
 sei_parameters = SideReactionParameters(
     name = :sei,
@@ -34,14 +30,23 @@ n = SolidParticleParameters(
     σₖ = 215, # Conductivity in S*m^-1
     c₀ = 29866, # Initial electrode concentration in mol*m^-3
     c₊ = 33133, # Maximum electrode concentration in mol*m^-3
-    # Open-circuit potential in V
     Uₖ = z->1.9793*exp(-39.3631*z) + 0.2482-0.0909*tanh(29.8538*(z-0.1234)) - 0.04478*tanh(14.9159*(z-0.2769)) - 0.0205*tanh(30.4444*(z-0.6103)), 
     mₖ = 6.48e-7, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
     L_sei₀ = 5e-9,
     side_reactions = [sei_parameters],
-    # Stoichiometry versus state of charge
     z_0 = 0.0279,   # Stoichiometry at zero percent state of charge
     z_100 = 0.9014, # Stoichiometry at full state of charge
+    
+    # Mechanical Properties
+    ϵₛ = 0.75, # Active material volume fraction
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 3.1e-06, # parial molar volume
+    E = 1.5e10, # Youngs modulus
+    ν = 0.3, # poissons ratio
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 60000000.0, # Critical stress for LAM
 )
 
 p = SolidParticleParameters(
@@ -51,13 +56,22 @@ p = SolidParticleParameters(
     σₖ = 0.18, # Conductivity in S*m^-1
     c₀ = 17038, # Initial electrode concentration in mol*m^-3
     c₊ = 63104, # Maximum electrode concentration in mol*m^-3
-    # Open-circuit potential in V
     Uₖ = z->-0.8090*z + 4.4875 - 0.0428*tanh(18.5138*(z-0.5542)) - 17.7326*tanh(15.7890*(z-0.3117)) + 17.5842*tanh(15.9308*(z-0.3120)), 
     mₖ = 3.42e-6, # Reaction rate constant in A*m^-2*(mol*m^-3)^-1.5
     L_sei₀ = 0,
-    # Stoichiometry versus state of charge
     z_0 = 0.9072,   # Stoichiometry at zero percent state of charge
     z_100 = 0.2567, # Stoichiometry at full state of charge
+    
+    # Mechanical Properties
+    ϵₛ = 0.665, # Active material volume fraction
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 1.25e-05, # parial molar volume
+    E = 3.75e11, # Youngs modulus
+    ν = 0.2, # poissons ratio
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 375000000.0, # Critical stress for LAM
 )
 
 e = ElectrolyteParameters(
@@ -65,7 +79,6 @@ e = ElectrolyteParameters(
     Lₛ= 12e-6, # Length of the separator in m
     Lₙ= 85.2e-6, # Length of the negative electrode in m
     Dₑ= c -> 8.794e−11 * (c/1000)^2 − 3.972e−10 * (c/1000) + 4.862e−10, # Diffusivity in m^2*s^-1
-    # Safely handle negative concentrations using NaNMath to prevent solver crashing
     σₑ= c -> 0.1297 * (c/1000)^3 − 2.51 * NaNMath.pow(c/1000, 1.5) + 3.329*(c/1000), # Conductivity in S*m^-1
     c₀= 1000.0, # Initial electrolyte concentration in mol*m^-3
     cₜ= 1000.0, # Typical electrolyte concentration in mol*m^-3
@@ -78,6 +91,13 @@ e = ElectrolyteParameters(
     bₙ = 1.5,
 )
 
+"""
+    Chen2020()
+
+Create a battery parameter set based on Chen et al. 2020.
+Returns a BatteryParameters object with parameters for a pouch-type lithium-ion battery cell
+using graphite negative electrode and NMC positive electrode.
+"""
 function Chen2020()
     return BatteryParameters(
         p = p,

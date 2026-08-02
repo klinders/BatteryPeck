@@ -98,6 +98,15 @@ Parameters describing lithium-ion electrode (active material particle) propertie
 - `side_reactions::Vector{SideReactionParameters}`: Secondary reactions on this electrode (default: [])
 - `z_0::Float64`: Stoichiometry at 0% state of charge
 - `z_100::Float64`: Stoichiometry at 100% state of charge
+- `ϵₛ::Float64`: Active material volume fraction
+- `ρ_cr::Float64`: Crack density (m⁻²)
+- `w_cr::Float64`: Crack width (m)
+- `Ω::Float64`: Partial molar volume (m³/mol)
+- `E::Float64`: Young's modulus (Pa)
+- `ν::Float64`: Poisson's ratio
+- `β_LAM::Float64`: LAM rate constant (s⁻¹)
+- `m_LAM::Float64`: LAM stress exponent
+- `stress_critical::Float64`: Critical stress for LAM (Pa)
 """
 Base.@kwdef mutable struct SolidParticleParameters
     Rₖ # Radius of the electrode in m
@@ -113,6 +122,17 @@ Base.@kwdef mutable struct SolidParticleParameters
     side_reactions::Vector{SideReactionParameters} = SideReactionParameters[]
     z_0::Float64 = 0.0 
     z_100::Float64 = 1.0
+
+    # Mechanical Degradation Parameters
+    ϵₛ # Active material volume fraction
+    ρ_cr # Crack density
+    w_cr # Crack width
+    Ω # Partial molar volume
+    E # Young's modulus
+    ν # Poisson's ratio
+    β_LAM # LAM rate constant
+    m_LAM # LAM stress exponent
+    stress_critical # Critical stress for LAM
 end
 
 """

@@ -30,13 +30,11 @@ function build_dcir_lut()
     println("\nRunning algebraic pulse tests (Recompiling at each SoC state)...")
     
     for soc in soc_targets
-        # 1. Update parameters BEFORE compilation
         p = Chen2020()
         p.Vmin = 1.0; p.Vmax = 5.5
         p.n.c₀ = (p.n.z_0 + soc * (p.n.z_100 - p.n.z_0)) * p.n.c₊  
         p.p.c₀ = (p.p.z_0 + soc * (p.p.z_100 - p.p.z_0)) * p.p.c₊
         
-        # 2. Build system FRESH so MTK bakes the new c0 states
         @named cell = SPMe(params=p, side_reactions=true)
         @named load = Current(); @named ground = Ground()
         @parameters t I_app=0.0
@@ -57,22 +55,22 @@ function build_dcir_lut()
         
         I_sym = get_sym(sys_simp, "I_app")
         
-        # 3. Get instantaneous OCV (I = 0.0A)
+        # Get instantaneous OCV (I = 0.0A)
         prob_ocv = ODEProblem(sys_simp, [I_sym => 0.0], (0.0, 1.0); sparse=true, jac=false)
         V_ocv = init(prob_ocv, QNDF(autodiff=true))[sys_simp.cell.v]
         
-        # 4. Get instantaneous loaded voltage (I = -5.0A)
+        # Get instantaneous loaded voltage (I = -5.0A)
         prob_pulse = ODEProblem(sys_simp, [I_sym => pulse_current], (0.0, 1.0); sparse=true, jac=false)
         V_loaded = init(prob_pulse, QNDF(autodiff=true))[sys_simp.cell.v]
         
-        # 5. Calculate exact Resistance
+        # Calculate exact resistance
         R_dcir = abs((V_ocv - V_loaded) / pulse_current)
         push!(dcir_values, R_dcir)
         
         println("  SoC: $(lpad(round(Int, soc*100), 3))% | V_ocv: $(round(V_ocv,digits=3)) V | DCIR: $(round(R_dcir*1000,digits=2)) mΩ")
     end
     
-    # 6. Save the Lookup Table
+    # Save LUT
     out_path = joinpath(@__DIR__, "..", "data", "Chen2020", "soc_dcir_lut.csv")
     df = DataFrame(SoC = soc_targets, DCIR_Ohms = dcir_values)
     CSV.write(out_path, df)
@@ -80,7 +78,7 @@ function build_dcir_lut()
     println("\n[!] Success! Saved DCIR LUT to:")
     println("    $out_path")
     
-    # 7. Plot the Curve
+    # Plot
     p1 = plot(soc_targets .* 100, dcir_values .* 1000, 
               title="Instantaneous DCIR vs. State of Charge",
               xlabel="State of Charge (%)", ylabel="Internal Resistance (mΩ)",

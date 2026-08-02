@@ -35,6 +35,17 @@ n = SolidParticleParameters(
     # Stoichiometry versus state of charge (LG M50 bounds)
     z_0 = 0.0279,   # Stoichiometry at zero percent state of charge
     z_100 = 0.9014, # Stoichiometry at full state of charge
+    
+    # Mechanical Properties
+    ϵₛ = 0.75, # Active material volume fraction
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 3.1e-06, # parial molar volume
+    E = 1.5e10, # Youngs modulus
+    ν = 0.3, # poissons ratio
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 60000000.0, # Critical stress for LAM
 )
 
 p = SolidParticleParameters(
@@ -51,6 +62,17 @@ p = SolidParticleParameters(
     # Stoichiometry versus state of charge (LG M50 bounds)
     z_0 = 0.9072,   # Stoichiometry at zero percent state of charge
     z_100 = 0.2567, # Stoichiometry at full state of charge
+    
+    # Mechanical Properties
+    ϵₛ = 0.665, # Active material volume fraction
+    ρ_cr = 3.18e15,
+    w_cr = 1.5e-8,
+    Ω = 1.25e-05, # parial molar volume
+    E = 3.75e11, # Youngs modulus
+    ν = 0.2, # poissons ratio
+    β_LAM = 2.7778e-07, # LAM rate constant
+    m_LAM = 2.0, # LAM stress exponent
+    stress_critical = 375000000.0, # Critical stress for LAM
 )
 
 e = ElectrolyteParameters(
@@ -94,7 +116,6 @@ characterization and are suitable for detailed electrochemical simulations.
 ```julia
 params = OKane2022()
 sys = SPMe(params=params, N=10)  # 10 FVM nodes per domain
-
 References
 
 See O'Kane et al. 2022 for detailed electrochemical characterization and model validation.

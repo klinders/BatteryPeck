@@ -11,8 +11,8 @@ using DataFrames
 using Plots
 
 # Define path to inspect (can be a folder name OR a direct .csv file name)
-TARGET_PATH = "diagnostic_90_days_master.csv" 
-MAX_DAYS_TO_PLOT = 90   
+TARGET_PATH = "results/ablation_run_1783197878/crate_0.1/scn_3/ablation_1_year_master.csv" 
+MAX_DAYS_TO_PLOT = 365 
 ZOOM_HOURS = 24.0         
 EXPORT_SVG = true         
 
@@ -105,7 +105,7 @@ function inspect_scenario(target_path::String)
         error("The loaded CSV file is entirely empty.")
     end
 
-    # CRITICAL FIX: Normalize time so t=0 is the start of this CSV chunk
+    # Normalize time so t=0 is the start of this CSV chunk
     # This prevents checkpointed data (starting at 157M seconds) from being deleted by the filter
     df_raw.Time_s .-= df_raw.Time_s[1]
     

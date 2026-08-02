@@ -5,8 +5,8 @@
 # Provides [Rest; Power; Charge; Drive; FCR; SmartSoC]Step primitives to construct load profiles.
 # Includes both DAE step! assignments and an explicit state machine compiler.
 # Contains:
-# 1. get_p0: Extract initial power or current value from step
-# 2. step!: Execute single experimental step via ModelingToolkit integrator
+# 1. get_p0: Retrieve initial power value for specific step type
+# 2. step!: Execute integration step for specific experimental protocol
 # 3. compile_experiment: Generate dynamic state machine closure for explicit co-simulators
 # =====================================================================================================================
 
@@ -20,20 +20,10 @@ const GLOBAL_RAMP_DURATION = 1.0
 
 abstract type Step end
 
-"""
-    RestStep
-
-Rest for given period.
-"""
 struct RestStep <: Step
     period::Real
 end
 
-"""
-    ChargeStep
-
-Charge up to specified SoC using given power for given period.
-"""
 struct ChargeStep <: Step
     soc::Real
     period::Real
@@ -41,21 +31,11 @@ struct ChargeStep <: Step
     ChargeStep(soc::Real, period::Real=0, power::Real=11000) = new(soc,period,power)
 end
 
-"""
-    PowerStep
-
-Apply given power for given period.
-"""
 struct PowerStep <: Step
     value::Real
     period::Real
 end
 
-"""
-    CurrentStep
-
-Apply given current for given period.
-"""
 struct CurrentStep <: Step
     value::Real
     period::Real
@@ -65,31 +45,25 @@ end
     TargetCurrentStep
 
 Apply given current until target SoC or voltage is reached (uses CV exponential decay).
+Accepts an optional `regime` argument to dictate the solver's time-stepping aggressiveness.
 """
 struct TargetCurrentStep <: Step
     value::Real
     target_soc::Real
     target_v::Real
     period::Real
+    regime::Symbol
+    
+    # Inner constructor defaults to smooth regime to maintain backward compatibility
+    TargetCurrentStep(value::Real, target_soc::Real, target_v::Real, period::Real, regime::Symbol=:smooth) = new(value, target_soc, target_v, period, regime)
 end
 
-"""
-    SmartSoCStep
-
-Dynamically charges or discharges at `max_current` to hit `target_soc`.
-Smoothly tapers in the last 2%, and permanently snaps to 0.0A (Rest) once reached.
-"""
 struct SmartSoCStep <: Step
     max_current::Real
     target_soc::Real
     period::Real
 end
 
-"""
-    DriveStep
-
-Apply drive cycle from given csv.
-"""
 struct DriveStep <: Step
     csv::Vector{Any}
     period::Real
@@ -110,11 +84,6 @@ struct DriveStep <: Step
     end
 end
 
-"""
-    CurrentDriveStep
-
-Drive cycle charge profile based on current array.
-"""
 struct CurrentDriveStep <: Step
     csv::Vector{Any}
     period::Real
@@ -128,6 +97,7 @@ struct CurrentDriveStep <: Step
         md = f[!, "Md"]
         raw_T_amb = f[!, "Temperature Chamber [degC]"] .+ 273.15
         
+        # Parse current direction based on mode string
         signed_i = zeros(Float64, length(raw_i))
         for j in eachindex(raw_i)
             mode_str = strip(String(md[j])) 
@@ -140,6 +110,7 @@ struct CurrentDriveStep <: Step
             end
         end
 
+        # Filter invalid time steps and extract clean profile arrays
         raw_dt = diff(t)
         valid_indices = findall(x -> x > 0.0, raw_dt)
         clean_dt = raw_dt[valid_indices]
@@ -147,6 +118,7 @@ struct CurrentDriveStep <: Step
         clean_t  = t[valid_indices .+ 1]            
         clean_T_amb = raw_T_amb[valid_indices .+ 1] 
 
+        # Apply cutoff period to array lengths if specified
         tend = length(clean_dt)
         end_time = t[end]
         if !isnothing(period)
@@ -161,11 +133,6 @@ struct CurrentDriveStep <: Step
     end
 end
 
-"""
-    FCRStep
-
-Apply vehicle to grid response based on frequency deviation.
-"""
 struct FCRStep <: Step
     t_data::Vector{Float64}
     f_data::Vector{Float64}
@@ -176,7 +143,13 @@ end
 """
     get_p0(s::Step)
 
-Extract initial power or current value from step.
+Retrieve initial power value for specific step type.
+
+# Arguments
+- `s::Step`: Experimental protocol step
+
+# Returns
+- Initial power magnitude
 """
 function get_p0(s::PowerStep) return s.value end
 function get_p0(s::CurrentStep) return s.value * 4.2 end
@@ -205,7 +178,21 @@ struct Experiment
     end
 end
 
+"""
+    step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::Step)
+
+Execute integration step for specific experimental protocol.
+
+# Arguments
+- `integrator::SciMLBase.DEIntegrator`: Active ODE integrator
+- `sys::ModelingToolkit.AbstractSystem`: System model
+- `step::Step`: Experimental protocol step
+
+# Returns
+- Nothing
+"""
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
+    # Apply parameter constraints and advance integrator to target time
     integrator.ps[sys.Iin] = 0.0
     integrator.ps[sys.Pin] = step.value
     u_modified!(integrator, true)
@@ -232,6 +219,7 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::ChargeStep)
+    # Extract state of charge and iterate step until target condition is met
     get_soc() = try integrator.sol[sys.soc][end] catch; try integrator.sol[sys.cell.soc][end] catch; integrator.sol[sys.cell1.soc][end] end end
     soc = get_soc()
     t_start = integrator.t
@@ -293,6 +281,7 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::DriveStep)
+    # Extract temporal data array and step through dynamic protocol profile
     has_Tamb = length(step.csv) >= 3
     for idx in 1:length(step.csv[1])
         dt = step.csv[1][idx]
@@ -312,6 +301,7 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::CurrentDriveStep)
+    # Iterate through current drive array and apply temporal constraints
     has_Tamb = length(step.csv) >= 3
     for idx in 1:length(step.csv[1])
         dt = step.csv[1][idx]
@@ -334,8 +324,15 @@ end
     compile_experiment(protocol::Experiment)
 
 Generate dynamic state machine closure for explicit co-simulators.
+
+# Arguments
+- `protocol::Experiment`: Configured experimental load cycle
+
+# Returns
+- Load closure function evaluating target states
 """
 function compile_experiment(protocol::Experiment)
+    # Initialise persistent closure tracking variables
     step_idx = 1
     t_step_start = 0.0
     drive_sub_idx = 1
@@ -356,6 +353,7 @@ function compile_experiment(protocol::Experiment)
         transition = false
         regime = :smooth
         
+        # Evaluate logical branching constraints based on current step structural type
         if step isa RestStep
             raw_target = 0.0
             regime = :rest
@@ -367,6 +365,9 @@ function compile_experiment(protocol::Experiment)
             
         elseif step isa TargetCurrentStep
             raw_target = step.value
+            
+            # Route strictly to defined regime
+            regime = step.regime 
             
             if !step_limit_hit
                 hit_soc = (raw_target > 0) ? (soc >= step.target_soc) : (soc <= step.target_soc)
@@ -385,23 +386,22 @@ function compile_experiment(protocol::Experiment)
         elseif step isa SmartSoCStep
             error_soc = step.target_soc - soc
             
-            # Snap strictly to Rest once hit
+            # Snap strictly to rest regime upon reaching target
             if step_limit_hit
                 raw_target = 0.0
                 regime = :rest
             else
-                if abs(error_soc) <= 0.0005 # 0.05% tolerance to perfectly nail the target
+                if abs(error_soc) <= 0.0005 
                     step_limit_hit = true
                     raw_target = 0.0
                     regime = :rest
                 else
-                    # Positive current = charge, Negative = discharge
                     raw_target = sign(error_soc) * step.max_current
                     
-                    # Proportional taper for the last 2% of SoC to land smoothly without overshooting
+                    # Apply proportional taper near target to prevent overshoot
                     if abs(error_soc) < 0.02
                         taper = abs(error_soc) / 0.02
-                        raw_target *= clamp(taper, 0.05, 1.0) # Down to 5% of max current before snapping
+                        raw_target *= clamp(taper, 0.05, 1.0) 
                     end
                 end
             end
@@ -446,6 +446,7 @@ function compile_experiment(protocol::Experiment)
             end
         end
         
+        # Execute phase progression upon completed segment and recursively fetch updated load
         if transition
             last_step_val = raw_target
             step_idx += 1
@@ -456,6 +457,7 @@ function compile_experiment(protocol::Experiment)
             return get_load(t, v_pack, soc)
         end
         
+        # Apply smoothing gradient over target step changes to preserve solver stability
         actual_ramp = min(GLOBAL_RAMP_DURATION, segment_period / 2.0)
         if dt < actual_ramp && actual_ramp > 0.0
             ramped_target = last_step_val + (raw_target - last_step_val) * (dt / actual_ramp)

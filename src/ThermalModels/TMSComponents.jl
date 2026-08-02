@@ -77,7 +77,7 @@ Editable values:
     C_wall = wall_volume * params.pipe_wall.density * params.pipe_wall.specific_heat
     
     # Declare initial state variables
-    sts = @variables T(t)=298.15 
+    sts = @variables T(t)=params.ambient_temperature
     
     # Formulate governing energy balance equations for thermal mass
     eqs = [
@@ -139,7 +139,7 @@ Editable values:
     
     # Declare fluid state variables
     sts = @variables begin
-        T(t) = 298.15 
+        T(t)=params.ambient_temperature
         p(t) 
         m_flow(t) 
         v(t) 
