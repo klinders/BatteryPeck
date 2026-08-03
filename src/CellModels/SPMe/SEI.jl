@@ -281,6 +281,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         # SEI concentration
         (c_sei(t))[1:N] = c_sei₀
         (j_sei(t))[1:N]
+        (aj_sei(t))[1:N]
         (ϕf(t))[1:N], [guess=zeros(N)]
         (L_sei(t))[1:N], [guess=ones(N)*p.Lf₀]
 
@@ -288,6 +289,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         c_ec_x(t)
         L_sei_x(t), [guess=p.Lf₀]
         j_sei_x(t), [guess=0]
+        aj_sei_x(t), [guess=0]
         ϕf_x(t), [guess=0]
         Q_loss(t)
     end
@@ -297,7 +299,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         p.E_sei / R * (1 / p.T_ref - 1 / T.u)
     )
 
-    η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
+    η_sei = [Δϕₛ.u[i] - p.U + ϕf[i] for i in 1:N]
 
     k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
     L_over_D = [L_sei[i]/D_ec for i in 1:N]
@@ -306,6 +308,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
         [j_sei[i] ~ -F*c_ec_0*k_exp[i]/(1 + L_over_D[i]*k_exp[i])*arrhenius for i in 1:N]...,
+        [aj_sei[i] ~ aₖ.u*j_sei[i] for i in 1:N]...,
         [c_ec[i] ~ c_ec_0/(1 + L_over_D[i]*k_exp[i]) for i in 1:N]...,
 
         [Dt(c_sei[i]) ~ -aₖ.u*j_sei[i]/(F*p.z) for i in 1:N]...,
@@ -316,6 +319,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
+        aj_sei_x ~ sum(aj_sei)/N,
         ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
         Q_loss ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
 

@@ -46,6 +46,9 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dt = Differential(t)
 
     @named i_app = RealInput() # Electrolyte current density
+    @named j_n = RealInput() # Electrolyte current density in negative electrode
+    @named j_p = RealInput() # Electrolyte current density in positive electrode
+
     @named T = RealInput(guess=298.15)
     @named Δϕₙ = RealInput()
     @named ϕₛn = RealInput()
@@ -90,11 +93,11 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     function j(x)
         if x <= p.Lₙ
-            return i_app.u/p.Lₙ
+            return j_n.u
         elseif x <= p.Lₙ + p.Lₛ
             return 0.0
         else
-            return -i_app.u/p.Lₚ
+            return j_p.u
         end
     end
 
@@ -208,5 +211,5 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ηₑ ~ (Mₚ - Mₙ)χ*R*T.u/F
     ]
 
-    System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])
+    System(eqns, t; name=name,systems=[i_app, j_n, j_p, T, Δϕₙ, ϕₛn])
 end

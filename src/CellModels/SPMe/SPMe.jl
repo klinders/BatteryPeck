@@ -70,7 +70,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
     
     @variables begin
         # Terminal voltage and current
-        v(t)
+        v(t), [guess=params.p.Uₖ(params.p.c₀/params.p.c₊) - params.n.Uₖ(params.n.c₀/params.n.c₊)]
         i(t)
         soc(t)
 
@@ -167,7 +167,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [ηₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
         ϕ̄ₚ ~ sum(ϕₚ)/Np,
-        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x + cracking_n.ϕf_x,
+        v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
         Rᵢ ~ (U₀-v)/i, 
 
         v ~ p.v - n.v,
@@ -175,24 +175,26 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         i ~ p.i,
 
         # Potential differences
-        [Δϕₙ[i] ~ ne.U₀ + ηᵣn[i] - sei.ϕf_x for i in 1:Nn]...,
+        [Δϕₙ[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
         [Δϕₚ[i] ~ ϕₚ[i] - el.ϕₑ[g.el.ixₚ[i]] for i in 1:Np]...,
-        Δϕₙ_x ~ sum(Δϕₙ)/Nn,
+        Δϕₙ_x ~ ne.U₀ + ϕ̄ₙ + ηᵣ̅n - sei.ϕf_x,
 
         # Electrolyte current density
         el.i_app.u ~ i_app,
+        el.j_n.u ~ i_app/params.e.Lₙ + cracking_n.aj_sei_x,
+        el.j_p.u ~ -i_app/params.e.Lₚ,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
         el.Δϕₙ.u ~ Δϕₙ_x,
 
-        ne.J.u ~  (i_app/params.e.Lₙ - sei.j_sei_x)/ne.aₖ, # Current density in the negative electrode
+        ne.J.u ~  i_app/params.e.Lₙ/ne.aₖ - sei.j_sei_x - plating.j_stripping_x, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/pe.aₖ, # Current density in the positive electrode
 
         # # Ne sei reaction
-        sei.J.u ~ i_app/params.e.Lₙ/ne.aₖ, # Current density for SEI side reaction
+        sei.J.u ~ ne.J.u, # Total current density for SEI potential
         sei.T.u ~ T.u,
         sei.aₖ.u ~ ne.aₖ,
-        sei.Δϕₛ.u ~ Δϕₙ,
+        [sei.Δϕₛ.u[i] ~ Δϕₙ_x for i in 1:Nn]...,
 
         # # Li plating
         plating.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
@@ -204,10 +206,10 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,
 
         ## Cracking
-        cracking_n.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
+        cracking_n.J.u ~ ne.J.u,
         cracking_n.T.u ~ T.u,
         cracking_n.aₖ.u ~ ne.aₖ,
-        [cracking_n.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [cracking_n.Δϕₛ.u[i] ~ Δϕₙ_x for i in 1:Nn]...,
         cracking_n.c_s_r.u ~ ne.c_r,
         cracking_n.c_s_surf.u ~ ne.c_surf,
 
@@ -231,7 +233,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - ne.aₖ*(
-            sei.L_sei[i] - params.n.L_sei₀ 
+            sei.L_sei[i] - params.n.L_sei₀
             + plating.L_plating[i] 
             + plating.L_dead[i]
              + cracking_n.L_sei[i]*(cracking_n.r_surf - 1)

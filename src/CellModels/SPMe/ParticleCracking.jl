@@ -287,6 +287,8 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     c_ec_0 = 4541.0
     D_ec = 2e-18
     k_sei = 1e-12
+    D_sol = 2.5e-22
+    c_sol = 2636.0
     
     # All SEI growth mechanisms assumed to have Arrhenius dependence
     arrhenius = exp(
@@ -305,6 +307,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         (c_ec(t))[1:N], [guess=ones(N)*c_ec_0]
         (c_sei(t))[1:N] = c_sei₀
         (j_sei(t))[1:N]
+        (aj_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
 
@@ -319,13 +322,14 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         c_sei_x(t)
         L_sei_x(t)
         j_sei_x(t)
+        aj_sei_x(t)
         ϕf_x(t)
         Q_sei(t)
     end
 
     dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr* sqrt(pi*l_cr), 0)
 
-    η_sei = [Δϕₛ.u[i] - p.U - ϕf[i] for i in 1:N]
+    η_sei = [Δϕₛ.u[i] - p.U + ϕf[i] for i in 1:N]
 
     k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
     L_over_D = [L_sei[i]/D_ec for i in 1:N]
@@ -344,7 +348,10 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         # Exchange current density
         # Scott Marquis thesis (eq. 5.92)
         # Exchange current density
+        # [j_sei[i] ~ -D_sol*c_sol*F/L_sei[i]*arrhenius for i in 1:N]...,
+
         [j_sei[i] ~ -F*c_ec_0*k_exp[i]/(1 + L_over_D[i]*k_exp[i])*arrhenius for i in 1:N]...,
+        [aj_sei[i] ~ a_cr*j_sei[i] for i in 1:N]...,
         [c_ec[i] ~ c_ec_0/(1 + L_over_D[i]*k_exp[i]) for i in 1:N]...,
 
         [Dt(c_sei[i]) ~ -a_cr*j_sei[i]/(F*p.z) for i in 1:N]...,
@@ -360,9 +367,10 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         u_d_x ~ u_d,
 
         L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
+        # c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
         c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
         j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
+        aj_sei_x ~ sum(aj_sei)/N,
         ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
         Q_sei ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
     ]
