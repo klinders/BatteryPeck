@@ -91,5 +91,14 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     ]
 
-    System(eqns,t; name=name,systems=[J, T])
+
+    # Event working
+    events = [
+        [
+            c_surf ~ 0.01*p.c₊,
+            c_surf ~ 0.99*p.c₊,
+        ]=>(abort!,(;))
+    ]
+
+    System(eqns,t; name=name,systems=[J, T], continuous_events=events)
 end

@@ -254,7 +254,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         (c_dead(t))[1:N] = 0
         (L_plating(t))[1:N]
         (L_dead(t))[1:N]
-        (j_stripping(t))[1:N], [guess=j_strip0]
+        (j_stripping(t))[1:N], [guess=0]
         (aj_stripping(t))[1:N]
         (ϕf(t))[1:N]
         (η_plating(t))[1:N]

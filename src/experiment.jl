@@ -189,7 +189,8 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::ChargeStep)
-    soc = integrator.sol[sys.cell.soc][end]
+    get_soc = getsym(sys, sys.cell.soc)
+    soc = get_soc(integrator)[end]
     end_soc = step.soc
     t_start = integrator.t
 
@@ -198,7 +199,7 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
         set_u!(integrator, sys.Iin, 0)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 60, true)
-        soc = integrator.sol[sys.cell.soc][end]
+        soc = get_soc(integrator)[end]
     end
 end
 
@@ -206,11 +207,14 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
     t_start = integrator.t
 
     while integrator.t - t_start < step.period
-        v = integrator.sol[sys.V][end]
         set_u!(integrator, sys.Pin, 0)
         set_u!(integrator, sys.Iin, -step.value)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 1, true)
+        if integrator.sol.retcode != SciMLBase.ReturnCode.Success
+            @warn "Simulation step terminated at t=$(round(integrator.t,digits=2))"
+            break
+        end
     end
 end
 

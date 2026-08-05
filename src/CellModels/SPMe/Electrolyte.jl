@@ -73,7 +73,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ϵ̄ₚ(t)
 
         # Actual concentration
-        (cₑ(t))[1:g.Nₜ]
+        (cₑ(t))[1:g.Nₜ], [guess=fill(p.c₀, g.Nₜ)]
         # X average concentration
         c̄ₑ(t)
         c̄ₑn(t)

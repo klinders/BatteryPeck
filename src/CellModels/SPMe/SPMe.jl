@@ -3,6 +3,12 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Blocks
 using ModelingToolkitStandardLibrary.Electrical
 
+function abort!(mod,obs,ctx,int)
+    ModelingToolkit.terminate!(int)
+    t = round(int.t,digits=2)
+    @warn "Simulation step terminated at t=$t"
+    return (;)
+end
 
 include("SolidParticle.jl")
 include("Electrolyte.jl")
@@ -12,12 +18,6 @@ include("LithiumPlating.jl")
 include("ParticleCracking.jl")
 include("LAM.jl")
 
-function abort!(mod,obs,ctx,int)
-    ModelingToolkit.terminate!(int)
-    t = round(int.t,digits=2)
-    @warn "Simulation step terminated at t=$t"
-    return (;)
-end
 
 """
 The SPMe model implemented based on [MarquisEtAl2019](@citet) and [BrosaPlanellaWidanage2023](@citet)
@@ -33,6 +33,10 @@ The SPMe model implemented based on [MarquisEtAl2019](@citet) and [BrosaPlanella
 function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,10,10], :Nᵣ=>[10,10]), side_reactions=true)
     @parameters begin
         t # Time variable
+        k_sei = 2.76e-18
+        D_ec = 1.75e-19
+        α = 0.5
+        # D_sol = 2.5e-22
     end
     Dt = Differential(t)
 
@@ -168,7 +172,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         ϕ̄ₙ ~ sum(ϕₙ)/Nn,
         ϕ̄ₚ ~ sum(ϕₚ)/Np,
         v ~ U₀ + ηᵣ + el.ηₑ + el.Δϕₑ + Δϕₛ + sei.ϕf_x,
-        Rᵢ ~ (U₀-v)/i, 
+        Rᵢ ~ el.Δϕₑ + Δϕₛ + sei.ϕf_x, 
 
         v ~ p.v - n.v,
         0 ~ p.i + n.i,
@@ -185,7 +189,7 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         el.j_p.u ~ -i_app/params.e.Lₚ,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
-        el.Δϕₙ.u ~ Δϕₙ_x,
+        el.Δϕₙ.u ~ ne.U₀ + ηᵣ̅n - sei.ϕf_x,
 
         ne.J.u ~  i_app/params.e.Lₙ/ne.aₖ - sei.j_sei_x - plating.j_stripping_x, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/pe.aₖ, # Current density in the positive electrode
@@ -195,12 +199,19 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         sei.T.u ~ T.u,
         sei.aₖ.u ~ ne.aₖ,
         [sei.Δϕₛ.u[i] ~ Δϕₙ_x for i in 1:Nn]...,
+        sei.k_sei ~ k_sei,
+        sei.D_ec ~ D_ec,
+        sei.α ~ α,
+        cracking_n.k_sei ~ k_sei,
+        cracking_n.D_ec ~ D_ec,
+        cracking_n.α ~ α,
+        # sei.D_sol ~ D_sol,
 
         # # Li plating
         plating.J.u ~ i_app/params.e.Lₙ/ne.aₖ,
         plating.T.u ~ T.u,
         plating.aₖ.u ~ ne.aₖ,
-        [plating.Δϕₛ.u[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
+        [plating.Δϕₛ.u[i] ~ Δϕₙ_x for i in 1:Nn]...,
         plating.η_sei.u ~ sei.ϕf,
         [plating.cₑ.u[i] ~ el.cₑ[i] for i in 1:Nn]...,
         [plating.L_sei.u[i] ~ sei.L_sei[i] for i in 1:Nn]...,
@@ -258,8 +269,6 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         [
             v ~ params.Vmin,
             v ~ params.Vmax,
-            pe.c_surf ~ params.p.c₊*0.99,
-            ne.c_surf ~ params.n.c₊*0.99,
         ]=>(abort!,(;))
     ]
 

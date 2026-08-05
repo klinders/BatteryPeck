@@ -195,7 +195,7 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         t
         D_sol = 2.5e-22
         c_sol = 2636.0, [tunable=false]
-        E_sei = 38000.0
+        E_sei = 38000.0, [tunable=false]
         T_ref = 298.15
     end
 
@@ -256,6 +256,9 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
     
     @parameters begin
         t
+        k_sei = 2.76e-18
+        D_ec = 1.75e-19
+        α = 0.5
     end
 
     R = 8.314 # Universal gas constant
@@ -272,8 +275,8 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
 
     c_sei₀ = p.Lf₀/p.V̄*s.aₖ
     c_ec_0 = 4541.0
-    D_ec = 2e-18
-    k_sei = 1e-12
+    # D_ec = 1.75e-19
+    # k_sei = 2.76e-18
 
     @variables begin
         # EC concentration
@@ -301,7 +304,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
 
     η_sei = [Δϕₛ.u[i] - p.U + ϕf[i] for i in 1:N]
 
-    k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
+    k_exp = [k_sei*exp(-α*F/R/T.u*η_sei[i]) for i in 1:N]
     L_over_D = [L_sei[i]/D_ec for i in 1:N]
 
     eqns = [

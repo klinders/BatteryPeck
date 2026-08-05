@@ -251,6 +251,9 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     
     @parameters begin
         t
+        k_sei = 2.76e-18
+        D_ec = 1.75e-19
+        α = 0.5
     end
 
     R = 8.314 # Universal gas constant
@@ -285,10 +288,10 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     L₀ = 5e-13
     c_sei₀ = L₀/p.V̄*s.aₖ
     c_ec_0 = 4541.0
-    D_ec = 2e-18
-    k_sei = 1e-12
-    D_sol = 2.5e-22
-    c_sol = 2636.0
+    # D_ec = 1.75e-19
+    # k_sei = 2.76e-16
+    # D_sol = 2.5e-22
+    # c_sol = 2636.0
     
     # All SEI growth mechanisms assumed to have Arrhenius dependence
     arrhenius = exp(
@@ -331,7 +334,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
 
     η_sei = [Δϕₛ.u[i] - p.U + ϕf[i] for i in 1:N]
 
-    k_exp = [k_sei*exp(-p.α*F/R/T.u*η_sei[i]) for i in 1:N]
+    k_exp = [k_sei*exp(-α*F/R/T.u*η_sei[i]) for i in 1:N]
     L_over_D = [L_sei[i]/D_ec for i in 1:N]
 
     eqns = [
