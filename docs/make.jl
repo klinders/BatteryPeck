@@ -8,16 +8,40 @@ bib = CitationBibliography(
 makedocs(
     modules=[BatteryToolkit],
     authors="Koen Linders",
-    sitename="BatteryToolkit.jl";  
+    sitename="BatteryToolkit.jl";
     format = DocumenterVitepress.MarkdownVitepress(
         repo = "github.com/klinders/BatteryToolkit",
-        devbranch = "main", # or master, trunk, ...
+        devbranch = "main",
         devurl = "dev",
     ),
     plugins=[bib],
     pages=[
         "Home" => "index.md",
-        "FVM" => "Finite Volume Method/index.md",
-        "References"=>"references.md"
+        "Getting Started" => [
+            "Quick Start" => "guide/quickstart.md",
+            "Parameter Sets" => "guide/parameters.md",
+            "Experiments" => "guide/experiments.md",
+            "Examples" => "guide/examples.md",
+        ],
+        "Models" => [
+            "SPMe Cell Model" => "models/spme.md",
+            "Pack Models" => "models/pack-models.md",
+            "Side Reactions" => "models/side-reactions.md",
+        ],
+        "API Reference" => [
+            "Parameters" => "api/parameters.md",
+            "Cell Models" => "api/cellmodels.md",
+            "Pack Models" => "api/packmodels.md",
+            "Experiments" => "api/experiments.md",
+            "Solvers" => "api/solvers.md",
+        ],
+        "Advanced" => [
+            "Finite Volume Method" => "Finite Volume Method/index.md",
+        ],
+        "References" => "references.md"
     ]
+)
+
+deploydocs(
+    repo = "github.com/klinders/BatteryToolkit.git",
 )

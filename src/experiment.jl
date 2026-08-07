@@ -3,21 +3,22 @@ using SciMLBase
 using ModelingToolkit
 using Dates
 
-abstract type Step end
-
-include("services.jl")
+"""
+Abstract type for all step types in the experiment.
+"""
+abstract type AbstractStep end
 
 """
 Rest for a period
 """
-struct RestStep <: Step
+struct RestStep <: AbstractStep
     period::Real
 end
 
 """
 Charge up to specified SoC using the given power for the given period.
 """
-struct ChargeStep <: Step
+struct ChargeStep <: AbstractStep
     soc::Real
     period::Real
     power::Real
@@ -27,7 +28,7 @@ end
 """
 Apply a given  `power` for a given `period`
 """
-struct PowerStep <: Step
+struct PowerStep <: AbstractStep
     value::Real
     period::Real
 end
@@ -35,7 +36,7 @@ end
 """
 Apply a given  `current` for a given `period`
 """
-struct CurrentStep <: Step
+struct CurrentStep <: AbstractStep
     value::Real
     period::Real
 end
@@ -51,7 +52,7 @@ At the moment, the period can be up to the lenght of the csv.
 
 TODO: Repeat the cycle when period is longer then csv
 """
-struct DriveStep <: Step
+struct DriveStep <: AbstractStep
     csv::Vector{Any}
     period::Real
     DriveStep(file::String, period::Real=nothing) = begin
@@ -68,56 +69,109 @@ struct DriveStep <: Step
     end
 end
 
-"Get the initial value from a power step"
+"""
+Get the initial value for the first step of the experiment. This is used to set the initial conditions for the simulation. The behavior depends on the specific step type (PowerStep, RestStep, ChargeStep, CurrentStep, DriveStep).
+"""
+function get_p0(s::AbstractStep)
+    error("get_p0 not implemented for step type $(typeof(s))")
+end
+
 function get_p0(s::PowerStep)
     return -s.value
 end
 
-"Get the initial value from a current step"
 function get_p0(s::CurrentStep)
     return -s.value*4.2
 end
 
-"Get the initial value from a drive step"
 function get_p0(s::DriveStep)
     return -s.csv[2][1]
 end
 
-"Get the initial value from a charge step"
 function get_p0(s::ChargeStep)
     return s.power
 end
 
-"Get the initial value from a rest step"
 function get_p0(s::RestStep)
     return 0
 end
 
 
+
+"""
+    Experiment(steps::Vector{<:AbstractStep}, start_time::DateTime=DateTime(2020, 1, 1))
+
+Create an experimental profile composing multiple battery operation steps.
+
+Combines a sequence of operation steps (power, current, rest, charge, drive cycle) into
+a single experiment. Automatically calculates step timing and prepares parameters for
+simulation with the `simulate()` function.
+
+# Arguments
+- `steps::Vector{<:AbstractStep}`: Vector of step objects (RestStep, PowerStep, CurrentStep, ChargeStep, DriveStep)
+- `start_time::DateTime`: Real-world timestamp for first step (default: 2020-01-01)
+
+# Fields (automatically calculated)
+- `steps::Vector`: Original step vector
+- `tstops::Vector{Float64}`: Cumulative time at end of each step except the last (s)
+- `tend::Float64}`: Total simulation duration (s)
+- `step_count::Int64`: Number of steps
+- `p0::Float64`: Initial power/current value (W or A)
+- `start_time::DateTime`: Experiment start timestamp
+
+# Example
+```julia
+steps = [
+    PowerStep(1000, 1800),      # 1000W for 30 min
+    RestStep(300),               # 5 min rest
+    PowerStep(-500, 3600)        # -500W (discharge) for 1 hour
+]
+exp = Experiment(steps)
+sol = simulate(sys, exp, Rodas4())
+```
+"""
 struct Experiment
-    steps::Array{Step}
+    steps::Array{AbstractStep}
     tstops::Array{Float64}
     tend::Float64
     step_count::Int64
     p0::Float64
-    start_time::Date
-    Experiment(steps::Vector{T} where T<:Step, start_time::Date=Date(2020, 1, 1)) = begin
+    start_time::DateTime
+    end_time::DateTime
+    Experiment(steps::Vector{T} where T<:AbstractStep; start_time::DateTime=DateTime(2020, 1, 1)) = begin
         tstops = cumsum([s.period for s in steps])
         tend = tstops[end]
+        end_time = start_time + Dates.Second(tend)
         # Remove the last Tstop since it is the end of the simulation
         pop!(tstops)
         step_count = length(steps)
         p0 = get_p0(steps[1])
-        return new(steps, tstops, tend, step_count, p0, start_time)
+        return new(steps, tstops, tend, step_count, p0, start_time, end_time)
     end
 end
 
-function Base.:*(a::AbstractVector{<:Step}, n::Integer)
+function Base.:*(a::AbstractVector{<:AbstractStep}, n::Integer)
     return repeat(a,n)
 end
 
-function Base.:+(a::AbstractVector{<:Step}, b::AbstractVector{<:Step})
-    return vcat(a,b)
+function Base.:+(args::Vector{<:AbstractStep}...)
+    return vcat(args...)
+end
+
+"""
+    step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::AbstractStep)
+Apply a single step of the experiment to the DE integrator. This function modifies the integrator's input parameters according to the step type
+and advances the simulation by the step's period. The behavior depends on the specific step type (PowerStep, RestStep, ChargeStep, CurrentStep, DriveStep).
+
+# Arguments
+- `integrator::SciMLBase.DEIntegrator`: The DE integrator to modify and step
+- `sys::ModelingToolkit.AbstractSystem`: The system being simulated, used to access input variables
+- `step::AbstractStep`: The step to apply, which determines how the integrator's inputs are modified and how long to step the simulation
+
+
+"""
+function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::AbstractStep)
+    error("step! not implemented for step type $(typeof(step))")
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::PowerStep)
@@ -135,7 +189,8 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
 end
 
 function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.AbstractSystem, step::ChargeStep)
-    soc = integrator.sol[sys.cell.soc][end]
+    get_soc = getsym(sys, sys.cell.soc)
+    soc = get_soc(integrator)[end]
     end_soc = step.soc
     t_start = integrator.t
 
@@ -144,7 +199,7 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
         set_u!(integrator, sys.Iin, 0)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 60, true)
-        soc = integrator.sol[sys.cell.soc][end]
+        soc = get_soc(integrator)[end]
     end
 end
 
@@ -152,11 +207,14 @@ function step!(integrator::SciMLBase.DEIntegrator, sys::ModelingToolkit.Abstract
     t_start = integrator.t
 
     while integrator.t - t_start < step.period
-        v = integrator.sol[sys.V][end]
         set_u!(integrator, sys.Pin, 0)
         set_u!(integrator, sys.Iin, -step.value)
         u_modified!(integrator, true)
         OrdinaryDiffEq.step!(integrator, 1, true)
+        if integrator.sol.retcode != SciMLBase.ReturnCode.Success
+            @warn "Simulation step terminated at t=$(round(integrator.t,digits=2))"
+            break
+        end
     end
 end
 

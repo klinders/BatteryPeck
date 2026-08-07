@@ -1,5 +1,33 @@
 using ModelingToolkit
 
+"""
+    Electrolyte(; name, p::ElectrolyteParameters, g)
+
+Create a ModelingToolkit system for electrolyte salt concentration and ionic transport.
+
+Models lithium-ion transport through the electrolyte including diffusion in negative electrode,
+separator, and positive electrode. Computes concentration profiles and electrochemical potentials.
+
+# Arguments
+- `name`: System name for ModelingToolkit (required)
+- `p::ElectrolyteParameters`: Electrolyte material and transport parameters
+- `g`: FVM geometry object defining domain and node locations
+
+# Input Ports
+- `i_app`: Applied current density (A/m²)
+- `T`: Temperature (K)
+- `Δϕₙ`: Potential drop in negative electrode (V)
+- `ϕₛn`: Solid potential in negative electrode (V)
+
+# Output Variables
+- `cₑ`: Electrolyte concentration profile (mol/m³)
+- `c̄ₑ`: Average electrolyte concentration (mol/m³)
+- `ϕₑ`: Electrolyte potential profile (V)
+
+# Notes
+Uses finite volume method with Bruggeman correlation for tortuosity in porous media.
+Automatically computes diffusion and migration based on concentration gradients.
+"""
 function Electrolyte(;name, p::ElectrolyteParameters, g)
     @parameters begin
         t # Time variable
@@ -18,9 +46,12 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Dt = Differential(t)
 
     @named i_app = RealInput() # Electrolyte current density
-    @named T = RealInput()
-    @named Δϕₙ = RealInput(guess=0.0)
-    @named ϕₛn = RealInput(guess=0.0)
+    @named j_n = RealInput() # Electrolyte current density in negative electrode
+    @named j_p = RealInput() # Electrolyte current density in positive electrode
+
+    @named T = RealInput(guess=298.15)
+    @named Δϕₙ = RealInput()
+    @named ϕₛn = RealInput()
 
     @variables begin
         # Electrolyte concentration in mol*m^-3
@@ -42,7 +73,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ϵ̄ₚ(t)
 
         # Actual concentration
-        (cₑ(t))[1:g.Nₜ]
+        (cₑ(t))[1:g.Nₜ], [guess=fill(p.c₀, g.Nₜ)]
         # X average concentration
         c̄ₑ(t)
         c̄ₑn(t)
@@ -62,11 +93,11 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
 
     function j(x)
         if x <= p.Lₙ
-            return i_app.u/p.Lₙ
+            return j_n.u
         elseif x <= p.Lₙ + p.Lₛ
             return 0.0
         else
-            return -i_app.u/p.Lₚ
+            return j_p.u
         end
     end
 
@@ -89,7 +120,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     ]
 
     # Electrolyte potential drop
-    B = [p.σₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
+    B = [p.σₑ(cₑ[i], T.u)*(ϵ[i]^b[i]) for i in 1:g.Nₜ]
     f1 = [iₑ(x[i])/B[i] for i in 1:g.Nₜ]
 
     ϕₑ_r = cumsum([
@@ -102,7 +133,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     # Electrolyte reaction potential
     df_fac = ones(length(cₑ))
 
-    Dᵢ = [p.Dₑ(cₑ[i])*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
+    Dᵢ = [p.Dₑ(cₑ[i], T.u)*(ϵ[i]^b[i]) for i in 1:g.Nₜ] # Face diffusivities
     Dₗ = [nothing, [D_face(Dᵢ[i-1], Dᵢ[i], Δx[i-1], Δx[i]) for i in 2:g.Nₜ]...]
     Dᵣ = [[D_face(Dᵢ[i], Dᵢ[i+1], Δx[i], Δx[i+1]) for i in 1:g.Nₜ-1]..., nothing]
 
@@ -110,9 +141,9 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     Nᵣ = [[-Dᵣ[i]*(cₑ[i+1] - cₑ[i])/Δxᵣ[i] + p.t₊(cₑ[i])*iₑ(xᵣ[i])/F for i in 1:g.Nₜ-1]..., 0]
 
     # Effective electrolyte conductivity
-    κₙ = p.σₑ(c̄ₑ)*(ϵ̄ₙ^p.bₙ)
-    κₛ = p.σₑ(c̄ₑ)*(ϵ̄ₛ^p.bₛ)
-    κₚ = p.σₑ(c̄ₑ)*(ϵ̄ₚ^p.bₚ)
+    κₙ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₙ^p.bₙ)
+    κₛ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₛ^p.bₛ)
+    κₚ = p.σₑ(c̄ₑ, T.u)*(ϵ̄ₚ^p.bₚ)
 
     # phi_e max 1e15
     function M(x)
@@ -163,7 +194,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         # Electrolyte potential
         [ϕₑ[i] ~ ϕₑ_f[i] for i in 1:g.Nₜ]...,
 
-        ϕ̄ₑn ~ ϕₑ_rn + χ*R*T.u/F*Mₙ,# sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],
+        ϕ̄ₑn ~ sum([ϕₑ[i] for i in g.ixₙ])/g.Nx[1],#ϕₑ_rn + χ*R*T.u/F*Mₙ,# 
         ϕ̄ₑs ~ sum([ϕₑ[i] for i in g.ixₛ])/g.Nx[2],
         ϕ̄ₑp ~ sum([ϕₑ[i] for i in g.ixₚ])/g.Nx[3],
         ϕ̄ₑ ~ (ϕ̄ₑn*p.Lₙ + ϕ̄ₑs*p.Lₛ + ϕ̄ₑp*p.Lₚ)/L,
@@ -180,5 +211,14 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ηₑ ~ (Mₚ - Mₙ)χ*R*T.u/F
     ]
 
-    System(eqns, t; name=name,systems=[i_app, T, Δϕₙ, ϕₛn])
+    # Event working
+    events = [
+        [
+            minimum(cₑ) ~ 0,
+            minimum(ϵ) ~ 0,
+            maximum(ϵ) ~ 1,
+        ]=>(abort!,(;))
+    ]
+
+    System(eqns, t; name=name,systems=[i_app, j_n, j_p, T, Δϕₙ, ϕₛn], continuous_events=events)
 end
