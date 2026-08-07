@@ -17,7 +17,7 @@ include("SEI.jl")
 include("LithiumPlating.jl")
 include("ParticleCracking.jl")
 include("LAM.jl")
-
+include("CathodeDissolution.jl")
 
 """
 The SPMe model implemented based on [MarquisEtAl2019](@citet) and [BrosaPlanellaWidanage2023](@citet)
@@ -68,9 +68,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
     @named lam_n = LAM.StressDriven(p=params.n.side_reactions[1], s=params.n, V=params.e.Lₙ*A, g=g)
     @named lam_p = LAM.StressDriven(p=params.n.side_reactions[1], s=params.p, V=params.e.Lₚ*A, g=g)
+    @named cathode_diss = CathodeDissolution.DiffusionCurrent(s=params.p, V=params.e.Lₚ*A, g=g)
 
-
-    submodels = [p,n,T,pe,ne,el,sei,plating,cracking_n,cracking_p,lam_n,lam_p]
+    submodels = [p,n,T,pe,ne,el,sei,plating,cracking_n,cracking_p,lam_n,lam_p,cathode_diss]
     
     @variables begin
         # Terminal voltage and current
@@ -185,13 +185,13 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
 
         # Electrolyte current density
         el.i_app.u ~ i_app,
-        el.j_n.u ~ i_app/params.e.Lₙ + cracking_n.aj_sei_x,
+        el.j_n.u ~ i_app/params.e.Lₙ,
         el.j_p.u ~ -i_app/params.e.Lₚ,
         # el.jₙ0.u ~ jₙ0,
         el.ϕₛn.u ~ ϕ̄ₙ,
         el.Δϕₙ.u ~ ne.U₀ + ηᵣ̅n - sei.ϕf_x,
 
-        ne.J.u ~  i_app/params.e.Lₙ/ne.aₖ - sei.j_sei_x - plating.j_stripping_x, # Current density in the negative electrode
+        ne.J.u ~  i_app/params.e.Lₙ/ne.aₖ - sei.j_sei_x - plating.j_stripping_x - cracking_n.j_sei_x, # Current density in the negative electrode
         pe.J.u ~  -i_app/params.e.Lₚ/pe.aₖ, # Current density in the positive electrode
 
         # # Ne sei reaction
@@ -240,7 +240,9 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         lam_p.σₜ.u ~ cracking_p.σₜ,
         lam_p.σᵣ.u ~ cracking_p.σᵣ,
         lam_p.c_r.u ~ pe.c_r,
-        Dt(pe.ϵₛ) ~ lam_p.j_lam,
+        cathode_diss.Δϕₛ.u ~ Δϕₙ_x,
+        cathode_diss.T.u ~ T.u,
+        Dt(pe.ϵₛ) ~ lam_p.j_lam + cathode_diss.j_diss,
         
         # Porosity (assumed constant)
         [el.ϵ[i] ~ params.e.ϵₙ - ne.aₖ*(

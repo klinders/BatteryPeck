@@ -211,5 +211,14 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
         ηₑ ~ (Mₚ - Mₙ)χ*R*T.u/F
     ]
 
-    System(eqns, t; name=name,systems=[i_app, j_n, j_p, T, Δϕₙ, ϕₛn])
+    # Event working
+    events = [
+        [
+            minimum(cₑ) ~ 0,
+            minimum(ϵ) ~ 0,
+            maximum(ϵ) ~ 1,
+        ]=>(abort!,(;))
+    ]
+
+    System(eqns, t; name=name,systems=[i_app, j_n, j_p, T, Δϕₙ, ϕₛn], continuous_events=events)
 end
