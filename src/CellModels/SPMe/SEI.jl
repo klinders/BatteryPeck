@@ -44,10 +44,10 @@ function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolk
     
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = 0
+        (c_sei(t))[1:N] = fill(0,N)
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
-        (L_sei(t))[1:N] = 0
+        (L_sei(t))[1:N] = fill(0,N)
 
         c_sei_x(t)
         L_sei_x(t)
@@ -66,10 +66,10 @@ function NoSEI(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryToolk
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ J.u*L_sei[i]*p.R for i in 1:N]...,
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_sei ~ 0,
 
     ]
@@ -126,7 +126,7 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
     
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = 0#scale
+        (c_sei(t))[1:N] = fill(0,N)#scale
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -150,10 +150,10 @@ function ReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, s:
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ J.u*L_sei[i]*p.R for i in 1:N]...,
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_sei ~ (c_sei_x-c_sei₀)*p.V̄*p.z*F/3600,
     ]
 
@@ -215,7 +215,7 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
 
     @variables begin
         # SEI concentration
-        (c_sei(t))[1:N] = c_sei₀
+        (c_sei(t))[1:N] = fill(c_sei₀,N)
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -241,10 +241,10 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei[i])/N,
+        c_sei_x ~ sum(c_sei[i])/N,
+        j_sei_x ~ sum(j_sei[i])/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_loss ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
 
     ]
@@ -282,7 +282,7 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         # EC concentration
         (c_ec(t))[1:N], [guess=ones(N)*c_ec_0]
         # SEI concentration
-        (c_sei(t))[1:N] = c_sei₀
+        (c_sei(t))[1:N] = fill(c_sei₀,N)
         (j_sei(t))[1:N]
         (aj_sei(t))[1:N]
         (ϕf(t))[1:N], [guess=zeros(N)]
@@ -318,12 +318,12 @@ function ECReactionLimitedSEI(; name, p::BatteryToolkit.SideReactionParameters, 
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        c_ec_x ~ sum(c_ec)/N,
+        j_sei_x ~ sum(j_sei)/N,
         aj_sei_x ~ sum(aj_sei)/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_loss ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
 
     ]

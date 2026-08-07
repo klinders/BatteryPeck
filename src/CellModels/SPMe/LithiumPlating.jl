@@ -49,8 +49,8 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
 
     @variables begin
         # Plating concentration
-        (c_plating(t))[1:N] = 0
-        (c_dead(t))[1:N] = 0
+        (c_plating(t))[1:N] = fill(0,N)
+        (c_dead(t))[1:N] = fill(0,N)
         (j_stripping(t))[1:N], [guess=j_strip0]
         (ϕf(t))[1:N]
 
@@ -70,9 +70,9 @@ function NoPlating(; name, p::BatteryToolkit.SideReactionParameters, s::BatteryT
         # Irreversable
         [Dt(c_dead[i]) ~ 0 for i in 1:N]...,
         [Dt(c_plating[i]) ~ 0 for i in 1:N]...,
-        c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
-        c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
-        j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
+        c_plating_x ~ sum(c_plating)/N,
+        c_dead_x ~ sum(c_dead)/N,
+        j_stripping_x ~ sum(j_stripping)/N,
         Q_loss ~ 0
     ]
 
@@ -135,11 +135,11 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
 
     @variables begin
         # Plating concentration
-        (c_plating(t))[1:N] = 0
-        (c_dead(t))[1:N] = 0
+        (c_plating(t))[1:N] = fill(0,N)
+        (c_dead(t))[1:N] = fill(0,N)
         (L_plating(t))[1:N]
         (L_dead(t))[1:N]
-        (j_stripping(t))[1:N], [guess=j_strip0]
+        (j_stripping(t))[1:N], [guess=fill(j_strip0, N)]
         (ϕf(t))[1:N]
         (η_plating(t))[1:N]
         (η_stripping(t))[1:N]
@@ -172,15 +172,15 @@ function IrreversiblePlating(; name, p::BatteryToolkit.SideReactionParameters, s
         # Irreversable
         [Dt(c_dead[i]) ~ -aₖ.u*j_stripping[i]/F for i in 1:N]...,
         [Dt(c_plating[i]) ~ 0 for i in 1:N]...,
-        c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
-        c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
-        j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
+        c_plating_x ~ sum(c_plating)/N,
+        c_dead_x ~ sum(c_dead)/N,
+        j_stripping_x ~ sum(j_stripping)/N,
         [L_plating[i] ~ c_plating[i]*V̄/aₖ.u for i in 1:N]...,
         [L_dead[i] ~ c_dead[i]*V̄/aₖ.u for i in 1:N]...,
-        L_plating_x ~ sum([L_plating[i] for i in 1:N])/N,
-        L_dead_x ~ sum([L_dead[i] for i in 1:N])/N,
-        η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
-        η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
+        L_plating_x ~ sum(L_plating)/N,
+        L_dead_x ~ sum(L_dead)/N,
+        η_plating_x ~ sum(η_plating)/N,
+        η_stripping_x ~ sum(η_stripping)/N,
         Q_plating ~ c_plating_x*Vk*F/3600,
         Q_dead ~ c_dead_x*V*F/3600,
         Q_loss ~ Q_plating + Q_dead
@@ -250,11 +250,11 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     
     @variables begin
         # Plating concentration
-        (c_plating(t))[1:N] = 0
-        (c_dead(t))[1:N] = 0
+        (c_plating(t))[1:N] = zeros(N)
+        (c_dead(t))[1:N] = zeros(N)
         (L_plating(t))[1:N]
         (L_dead(t))[1:N]
-        (j_stripping(t))[1:N], [guess=0]
+        (j_stripping(t))[1:N], [guess=fill(0,N)]
         (aj_stripping(t))[1:N]
         (ϕf(t))[1:N]
         (η_plating(t))[1:N]
@@ -299,15 +299,15 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         # Partially reversible
         [Dt(c_dead[i]) ~  coupling[i] for i in 1:N]...,
         [Dt(c_plating[i]) ~ -aₖ.u*j_stripping[i]/F - coupling[i] for i in 1:N]...,
-        c_plating_x ~ sum([c_plating[i] for i in 1:N])/N,
-        c_dead_x ~ sum([c_dead[i] for i in 1:N])/N,
-        j_stripping_x ~ sum([j_stripping[i] for i in 1:N])/N,
+        c_plating_x ~ sum(c_plating)/N,
+        c_dead_x ~ sum(c_dead)/N,
+        j_stripping_x ~ sum(j_stripping)/N,
         [L_plating[i] ~ c_plating[i]*V̄/aₖ.u for i in 1:N]...,
         [L_dead[i] ~ c_dead[i]*V̄/aₖ.u for i in 1:N]...,
-        L_plating_x ~ sum([L_plating[i] for i in 1:N])/N,
-        L_dead_x ~ sum([L_dead[i] for i in 1:N])/N,
-        η_plating_x ~ sum([η_plating[i] for i in 1:N])/N,
-        η_stripping_x ~ sum([η_stripping[i] for i in 1:N])/N,
+        L_plating_x ~ sum(L_plating)/N,
+        L_dead_x ~ sum(L_dead)/N,
+        η_plating_x ~ sum(η_plating)/N,
+        η_stripping_x ~ sum(η_stripping)/N,
         aj_stripping_x ~ sum(aj_stripping)/N,
         
         Q_plating ~ c_plating_x*V*F/3600,

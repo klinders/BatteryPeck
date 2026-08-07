@@ -44,13 +44,13 @@ function NoMechanics(; name, p::BatteryToolkit.SideReactionParameters, s::Batter
     
     @variables begin
         # Mechanics
-        (a_cr(t))[1:N] = 0
+        (a_cr(t))[1:N] = fill(0,N)
 
         # SEI concentration
-        (c_sei(t))[1:N] = 0
+        (c_sei(t))[1:N] = fill(0,N)
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
-        (L_sei(t))[1:N] = 0
+        (L_sei(t))[1:N] = fill(0,N)
 
         a_cr_x(t)
         c_sei_x(t)
@@ -72,11 +72,11 @@ function NoMechanics(; name, p::BatteryToolkit.SideReactionParameters, s::Batter
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
-        a_cr_x ~ sum([a_cr[i] for i in 1:N])/N,
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        a_cr_x ~ sum(a_cr)/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_sei ~ 0,
 
     ]
@@ -161,7 +161,7 @@ function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
         u_d(t)
         
         # SEI concentration
-        (c_sei(t))[1:N] = 0
+        (c_sei(t))[1:N] = fill(0,N)
         (j_sei(t))[1:N]
         (ϕf(t))[1:N]
         (L_sei(t))[1:N]
@@ -208,10 +208,10 @@ function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
         σᵣ_x ~ σᵣ,
         u_d_x ~ u_d,
 
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_sei ~ 0,
     ]
 
@@ -299,7 +299,7 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
     )
     
     @variables begin
-        l_cr(t) = l_cr_0 
+        l_cr(t) = l_cr_0
         r_surf(t)
         a_cr(t)
         σₜ(t)
@@ -307,8 +307,8 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         u_d(t)
         
         # SEI concentration
-        (c_ec(t))[1:N], [guess=ones(N)*c_ec_0]
-        (c_sei(t))[1:N] = c_sei₀
+        (c_ec(t))[1:N], [guess=fill(c_ec_0, N)]
+        (c_sei(t))[1:N] = fill(c_sei₀,N)
         (j_sei(t))[1:N]
         (aj_sei(t))[1:N]
         (ϕf(t))[1:N]
@@ -369,12 +369,12 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         σᵣ_x ~ σᵣ,
         u_d_x ~ u_d,
 
-        L_sei_x ~ sum([L_sei[i] for i in 1:N])/N,
-        # c_ec_x ~ sum([c_ec[i] for i in 1:N])/N,
-        c_sei_x ~ sum([c_sei[i] for i in 1:N])/N,
-        j_sei_x ~ sum([j_sei[i] for i in 1:N])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        # c_ec_x ~ sum(c_ec)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
         aj_sei_x ~ sum(aj_sei)/N,
-        ϕf_x ~ sum([ϕf[i] for i in 1:N])/N,
+        ϕf_x ~ sum(ϕf)/N,
         Q_sei ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
     ]
 

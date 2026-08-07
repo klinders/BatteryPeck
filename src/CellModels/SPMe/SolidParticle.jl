@@ -43,7 +43,7 @@ function SolidParticle(; name, p::SolidParticleParameters, g)
 
     @variables begin
         # I am adding two ghost nodes for the boundary conditions
-        (c(t))[1:g.Nᵣ] = repeat([p.c₀],g.Nᵣ)
+        (c(t))[1:g.Nᵣ] = fill(p.c₀,g.Nᵣ)
         (D(t))[1:g.Nᵣ]
         (σ(t))[1:g.Nᵣ]
         D_r(t)
