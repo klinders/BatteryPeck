@@ -28,12 +28,14 @@ function StressDriven(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     
     @parameters begin
         t
+        β_LAM = 2.7778e-07 # LAM rate constant
+        m_LAM = 2.0 # LAM stress exponent
     end
-
+    
     R = 8.314 # Universal gas constant
     F = 96485 # Faraday's constant
     N = g.el.Nx[1]
-
+    
     @named σᵣ = RealInput()
     @named σₜ = RealInput()
     @named c_r = RealInput()
@@ -47,10 +49,10 @@ function StressDriven(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
         lli(t) = 0
         Q_loss(t)
     end
-
+    
     # obtain the rate of loss of active materials (LAM) by stress
     # This is loss of active material model by mechanical effects
-
+    
     # compute hydrostatic stress
     σₕ = (σᵣ.u + 2 * σₜ.u) / 3
 
@@ -63,7 +65,7 @@ function StressDriven(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     σₕ_min = σₕ * 0
 
     eqns = [
-        j_lam ~ -s.β_LAM*((σₕ_t - σₕ_min) / s.stress_critical)^s.m_LAM,
+        j_lam ~ -β_LAM*((σₕ_t - σₕ_min) / s.stress_critical)^m_LAM,
         Dt(lli) ~ -V * c_r.u * j_lam,
         Q_loss ~ lli * F / 3600
     ]

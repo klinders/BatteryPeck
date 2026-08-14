@@ -223,6 +223,9 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     
     @parameters begin
         t
+        γ₀ = 1e-6
+        α_plating = 0.65 # Li plating transfer coefficient
+        k_plating = 1e-9
     end
 
     R = 8.314 # Universal gas constant
@@ -241,9 +244,7 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
     Dt = Differential(t)
 
     scale = 1000 # c_typical
-    α_plating = 0.65 # Li plating transfer coefficient
     α_stripping = 1 - α_plating
-    k_plating = 1e-9
     V̄ = 1.3e-05 # Partial molar volume of lithium [m3.mol-1]
 
     j_strip0 = F*k_plating*1000
@@ -277,7 +278,6 @@ function PartiallyReversiblePlating(; name, p::BatteryToolkit.SideReactionParame
         Q_loss(t)
     end
 
-    γ₀ = 1e-6
     L_sei_0 = 5e-9
     
     coupling = [c_plating[i]*γ₀*L_sei_0/L_sei.u[i] for i in 1:N]

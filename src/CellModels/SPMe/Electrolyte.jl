@@ -215,7 +215,7 @@ function Electrolyte(;name, p::ElectrolyteParameters, g)
     events = [
         [
             minimum(cₑ) ~ 0,
-            minimum(ϵ) ~ 0,
+            minimum(ϵ) ~ 0.05,
             maximum(ϵ) ~ 1,
         ]=>(abort!,(;))
     ]

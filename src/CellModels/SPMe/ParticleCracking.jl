@@ -132,10 +132,6 @@ function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
     R0 = s.Rₖ
     c₀ = 0
 
-    k_cr = 3.9e-20
-    b_cr = 1.12
-    m_cr = 2.2
-
     @named J = RealInput()
     @named T = RealInput()
     @named Δϕₛ = RealInputArray(nin=N)
@@ -180,7 +176,7 @@ function SwellingOnly(; name, p::BatteryToolkit.SideReactionParameters, s::Batte
         Q_sei(t)
     end
 
-    dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr* sqrt(pi*l_cr), 0)
+    # dK_SIF = ifelse(σₜ >= 0, σₜ*b_cr* sqrt(pi*l_cr), 0)
 
     eqns = [
 
@@ -254,6 +250,9 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
         k_sei = 2.76e-18
         D_ec = 1.75e-19
         α = 0.5
+        k_cr = 3.9e-20
+        b_cr = 1.12
+        m_cr = 2.2
     end
 
     R = 8.314 # Universal gas constant
@@ -268,10 +267,6 @@ function SwellingAndCracking(; name, p::BatteryToolkit.SideReactionParameters, s
 
     R0 = s.Rₖ
     c₀ = 0
-
-    k_cr = 3.9e-20
-    b_cr = 1.12
-    m_cr = 2.2
 
     @named J = RealInput()
     @named T = RealInput()

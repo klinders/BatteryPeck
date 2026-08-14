@@ -175,8 +175,8 @@ function SPMe(; name="SPMe", params::BatteryParameters, Q=0, N=Dict(:Nₓ=>[10,1
         Rᵢ ~ el.Δϕₑ + Δϕₛ + sei.ϕf_x, 
 
         v ~ p.v - n.v,
-        0 ~ p.i + n.i,
-        i ~ p.i,
+        p.i ~ i,
+        n.i ~-i,
 
         # Potential differences
         [Δϕₙ[i] ~ ϕₙ[i] - el.ϕₑ[g.el.ixₙ[i]] for i in 1:Nn]...,
