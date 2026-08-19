@@ -26,9 +26,9 @@ exp = Experiment([PowerStep(1000, 3600)])  # 1000W for 1 hour
 sol = simulate(sys, exp, Rodas4())
 ```
 """
-function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, args...; parameters=[], kwargs...)
-    
-    prob = ODEProblem(sys, [[sys.Pin=>experiment.p0, sys.Iin=>0]; parameters], (0.0,experiment.tend))
+function simulate(sys::ModelingToolkit.AbstractSystem, experiment::Experiment, args...; parameters=nothing, kwargs...)
+    u0 = parameters!==nothing ? [[sys.Pin=>experiment.p0, sys.Iin=>0]; parameters] : [sys.Pin=>experiment.p0, sys.Iin=>0]
+    prob = ODEProblem(sys, u0, (0.0,experiment.tend))
     integrator = init(prob,args...; tstops=experiment.tstops, save_everystep=false, kwargs...)
 
     time_scale, time_unit, time_symbol = format_time(experiment.tend)

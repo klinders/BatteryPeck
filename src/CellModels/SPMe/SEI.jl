@@ -241,9 +241,9 @@ function SolventDiffusionLimitedSEI(; name, p::BatteryToolkit.SideReactionParame
         [L_sei[i] ~ c_sei[i]*p.V̄/aₖ.u for i in 1:N]...,
 
         [ϕf[i] ~ -J.u*L_sei[i]*p.R for i in 1:N]...,
-        L_sei_x ~ sum(L_sei[i])/N,
-        c_sei_x ~ sum(c_sei[i])/N,
-        j_sei_x ~ sum(j_sei[i])/N,
+        L_sei_x ~ sum(L_sei)/N,
+        c_sei_x ~ sum(c_sei)/N,
+        j_sei_x ~ sum(j_sei)/N,
         ϕf_x ~ sum(ϕf)/N,
         Q_loss ~ (c_sei_x-c_sei₀)*V*p.z*F/3600,
 
